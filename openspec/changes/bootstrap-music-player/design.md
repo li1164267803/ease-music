@@ -56,11 +56,30 @@
 
 **版本锁定**：Expo SDK 57 / React Native 0.86。
 
-### 决策 3：播放引擎选用 react-native-track-player，而非 expo-audio
+### 决策 3：播放引擎选用 expo-audio
 
-**理由**：本项目需要播放队列管理、后台播放、锁屏与通知栏媒体控制、耳机按键响应。`react-native-track-player` 原生提供这一整套；`expo-audio` 定位于音频播放本身，媒体会话相关能力需自行补齐。
+> **本决策已于实施阶段推翻重写。** 原方案为 `react-native-track-player`，理由是它原生提供播放队列 + 后台播放 + 锁屏/通知栏媒体控制 + 耳机按键这一整套，而当时的 `expo-audio` 只做音频播放本身、媒体会话需自行补齐。原决策同时预留了「该库历史上有过维护断档，需在实施早期验证，若存在硬缺口需尽早暴露」——下面就是那个硬缺口。
 
-**代价**：该库历史上有过维护断档。需在实施早期验证锁屏控制与音频焦点处理是否满足 spec 要求，若存在硬缺口需尽早暴露。
+**推翻原方案的事实**（2026-08 在任务 1.4 装依赖时发现，早于 spike 2.2）：
+
+1. `react-native-track-player` 自 v5 起**转为商业授权**，包名更为 `@rntp/player`（当前 5.8.0，`license: SEE LICENSE IN <license.txt>`），个人与教育用途免费，商用需付费。
+2. Apache-2.0 的 v4 线**已冻结**：npm `latest` 停在 4.1.2（2025-08-12），官方声明 v4 分支不再更新。该版本早于 React Native 0.82 删除旧架构，对 RN 0.86 / Expo SDK 57 的兼容性无人负责。
+3. 商业授权版**与本项目的 GPL-3.0 分发冲突**。GPL 第 6 条不允许对接收者施加进一步限制，专有授权的第三方库无法与 GPL 代码一并分发，且会直接断绝 F-Droid 收录——这与决策 9 派生约束 2（依赖不得引入无法由维护者自行授权的第三方库）是同一条红线，只是方向相反：那里防的是 GPL 传染，这里防的是专有授权反噬。
+
+参考项目 MusicFree 使用 `react-native-track-player: ^4.1.1`，但其运行在 RN 0.76.5 / Expo SDK 52 上——旧架构直到 RN 0.82 才移除，因此它**不能作为该库在 RN 0.86 上可用的依据**；相反，它停留在两年前的 SDK 这一事实本身，正是决策 2 所警惕的「被原生模块拖住导致升级停摆」的实例。
+
+**改选 `expo-audio` 的理由**：原决策排除它的前提（媒体会话能力缺失）在 SDK 57 上已不成立。核对其源码而非文档所得：
+
+- `AudioPlayer.setActiveForLockScreen(active, metadata, options)` / `updateLockScreenMetadata` / `clearLockScreenControls` 提供锁屏与通知栏媒体会话。iOS 侧 `MediaController.swift` 注册 `playCommand` / `pauseCommand` / `togglePlayPauseCommand` / `changePlaybackPositionCommand` / `skipForward` / `skipBackward`；Android 侧走 media3 `MediaSession` 配合 `AudioControlsService` 前台服务。
+- `setAudioModeAsync({ interruptionMode: 'doNotMix', shouldPlayInBackground: true })` 覆盖音频焦点与后台播放；`AudioStatus` 暴露 `isBuffering` / `error` / `duration` / `currentTime` / `didJustFinish`，满足 spec 的播放状态可观测要求。
+- **`AudioSource` 直接支持 `headers`**，与决策 4 的契约形状（可播放地址 + HTTP 请求头 + User-Agent）天然吻合，无需额外适配。
+- 许可证为 MIT，且随 Expo SDK 一同升级——这正是决策 2 选择 Expo 的核心收益，改用它反而让该收益覆盖到播放引擎本身。
+
+**接受的代价一：锁屏、通知栏与蓝牙设备上没有「上一曲/下一曲」按钮。** 这是 `expo-audio` 的主动设计而非疏漏——Android 侧 `AudioMediaSessionCallback.kt` 显式 `.remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)` 等四条曲目导航命令，iOS 侧从未注册 `nextTrackCommand`；且 `setActiveForLockScreen` 只挂在 `AudioPlayer` 上，具备队列 API 的 `AudioPlaylist` 没有锁屏能力。
+
+对照 `media-playback` 的「系统级媒体控制」要求：三个 scenario（锁屏点击暂停、耳机播放/暂停键、媒体控件显示标题/艺术家/封面）**均可满足**，spec 无需修改。做不到的是车机与蓝牙耳机上的切歌操作——它没有写进 spec，但对音乐播放器是日常操作。本 change 如实记录该缺口并接受，若日后判断必须补齐，写一个只负责注册媒体会话命令并转发到 JS 的最小 Expo Module 即可，成本可控且不触动分层。
+
+**接受的代价二：播放队列自行实现。** `expo-audio` 的 `AudioPlaylist` 虽有队列 API，但不支持锁屏，因此播放层采用 `AudioPlayer` + 自研队列。这不构成额外成本——spec 要求的四种播放模式（顺序、列表循环、单曲循环、随机）本就无法由任何现成队列直接表达，且每首曲目播放前需按来源实时解析地址（决策 4 的关键约束），队列本来就必须掌握在自己手里。
 
 ### 决策 4：来源解析契约的形状
 
@@ -144,23 +163,48 @@
 
 ## Risks / Trade-offs
 
-**[React Native 环境下无可用的音频元数据解析方案]** → 这是本 change 唯一的技术未知项，也是唯一可能改变实现方式的风险。需在实施第一步以 spike 解决，候选方向按优先级：
-
-1. `music-metadata` 配合 Buffer / stream polyfill —— 功能最完整，但依赖 Node 生态假设，RN 下可行性未验证
-2. `jsmediatags` —— 设计上支持浏览器与 RN 环境，但功能与维护活跃度较弱
-3. **自实现最小 ID3v2 / Vorbis Comment 解析器** —— 只解析实际需要的字段（标题、艺术家、专辑、音轨号、内嵌封面）。格式稳定，无外部依赖，完全可控
-
-方案 3 是保底退路：即使 1 和 2 全部失败，该能力依然可以交付，只是工作量增加。因此该风险**不会阻塞本 change**，只影响其成本。spec 中已要求元数据解析失败时降级到文件名，功能底线有保障。
+**[~~React Native 环境下无可用的音频元数据解析方案~~]** → **已由 spike 2.1 排除，采用候选方案 1 `music-metadata`（11.14.0，MIT）。** 结论见下方「spike 2.1 结论」。原风险描述中「依赖 Node 生态假设」的判断对 v11 已不成立，方案 2（`jsmediatags`，最后发布于 2022 年）与方案 3（自实现解析器）均无需启用。
 
 **[来源抽象无法容纳网盘、插件或缓存层，导致后续返工]** → 契约形状已按决策 4 论证覆盖四类来源，并明确要求解析入口唯一以便缓存层拦截。额外的缓解措施：在实现本地文件与远程 URL 两个来源时，刻意保持二者实现路径的差异性（一个走文件系统、一个走网络），以尽早暴露抽象泄漏。
 
-**[react-native-track-player 无法满足锁屏/音频焦点要求]** → 在实施早期即验证该库的媒体会话能力，而非留到 UI 完成后。若存在硬缺口，可评估补写原生模块或更换方案，此时项目尚未在其上堆积代码。
+**[~~react-native-track-player 无法满足锁屏/音频焦点要求~~]** → **该风险已在任务 1.4 兑现，且以更严重的形式：库转为商业授权、开源版冻结。处置见重写后的决策 3——改用 `expo-audio`。** 风险预案（「若存在硬缺口，可评估补写原生模块或更换方案，此时项目尚未在其上堆积代码」）按设计生效：发现时间点在装依赖阶段，播放层尚无一行代码。
+
+**[expo-audio 的媒体会话能力在真机上不及预期]** → 决策 3 的结论来自阅读 `expo-audio` 的 iOS/Android 原生源码，尚未经真机验证。spike 2.2 仍需在两端真机上确认锁屏控制、通知栏控制、耳机按键、来电打断恢复实际可用。若发现进一步缺口，补写最小媒体会话原生模块是既定退路，且不触动分层。
 
 **[数据模型在后续 change 中被迫重构]** → 歌单的多对多关系已按决策 8 规范化建模，播放历史与备份导出的查询需求已在建模时纳入考虑。剩余风险主要来自 115 网盘曲目可能需要的额外字段（如网盘文件 id、父目录），缓解方式是曲目记录中「来源重解析所需信息」采用可扩展的结构而非固定列。
 
 **[核心能力意外依赖插件模块]** → 决策 7 的约束若在实施中被破坏，将直接导致 iOS 无法上架。缓解方式：本 change 完成时显式验证「不存在插件模块的情况下应用功能完整」，并在后续 change 中保持该验证。
 
 **[误用 MusicFree 源码导致 AGPL 传染]** → 实施过程中参考其协议规范与文档，不复制源码。该约束在 C6 中影响最大，本 change 内基本不触及。
+
+## Spike 结论
+
+### spike 2.1：音频元数据解析 —— 采用 `music-metadata` 11.14.0（MIT）
+
+原设计把该库列为首选但标注「依赖 Node 生态假设，RN 下可行性未验证」。**该顾虑已过期**：`music-metadata` v11 的 `exports` 映射提供 `node` 与 `default` 两套入口，`default` 指向不含任何 Node 内置模块的 `lib/core.js`。Metro 的解析条件不含 `node`，因此在 RN 下自动选中该入口，无需 polyfill、无需改 Metro 配置。
+
+实测结果（`ffmpeg` 生成的带标签样本，仅以 `Uint8Array` 调用 `parseBuffer`，不经 `Buffer` / `fs` / stream）：
+
+| 容器 | 标题 / 艺术家 / 专辑 | 音轨号 | 时长 | 内嵌封面 |
+| --- | --- | --- | --- | --- |
+| MP3（ID3v2.3） | ✅ 含中文，UTF-8 正确 | ✅ `{no:7, of:12}` | ✅ 3.030s | ✅ `image/png` |
+| FLAC（Vorbis Comment） | ✅ | ✅ | ✅ 3.000s | ✅ 支持 |
+| M4A（MP4 atom） | ✅ | ✅ | ✅ 3.023s | ✅ 支持 |
+| 无标签 MP3 | 字段为 `undefined` | `{no:null}` | ✅ 仍可得 | 无 |
+
+另外三项对实现方式有直接影响的发现：
+
+1. **可以只读文件头部。** 喂入前 8KB 即可解出标题、封面与时长（时长来自首帧的 Xing/Info 头）。因此导入流程采用「先读头部 → 若 `format.duration` 缺失再读全文件」的策略，避免为数千首曲目逐个整文件载入内存。缺少 Xing 头的 CBR 文件需要全文件扫描才能得到准确时长，这是回退路径存在的原因。
+2. **不需要传 MIME 类型**，库按字节嗅探容器格式。这一点重要——本地文件来源拿到的 URI 未必带可靠扩展名。
+3. **损坏输入抛出具名错误**（`CouldNotDetermineFileTypeError`）而非静默返回空对象，`music-library` spec 要求的「解析失败降级到文件名」因此有明确的捕获点。
+
+Metro 打包验证：在 `src/app` 中引入该库后执行 `expo export -p android`，1767 个模块打包通过，产出 4.3MB Hermes 字节码，**无任何 Node 内置模块缺失报错**。其依赖链中 `Buffer` 仅出现在注释与错误文案里，`globalThis.TextDecoder` / `TextEncoder` 在 `@borewit/text-codec` 中带自实现回退，Hermes 缺少这两个全局也不影响。
+
+**未覆盖的部分**：以上为打包期与 Node 环境下的验证，Hermes 运行时的实际解析行为需随 spike 2.2 一并在真机确认。若真机上出现意外，design.md 原列的方案 3（自实现最小解析器）仍是保底退路，spec 的功能底线（降级到文件名）不受影响。
+
+### spike 2.2：`expo-audio` 的媒体会话能力 —— 源码层已核对，真机验证待补
+
+已通过阅读 `expo-audio` 57.0.3 的 iOS/Android 原生源码确认能力边界，结论已并入重写后的决策 3（含锁屏无「上一曲/下一曲」这一缺口）。**锁屏控制、通知栏控制、耳机按键、来电打断恢复的真机实测尚未进行**，需在具备 iOS 与 Android 真机的环境中补齐。
 
 ## Migration Plan
 
