@@ -5,7 +5,7 @@
 - [ ] 1.3 配置代码规范（ESLint + Prettier）与路径别名
 - [ ] 1.4 安装 `react-native-track-player`，在 `app.json` 中配置 iOS `UIBackgroundModes: ["audio"]` 与 Android 前台服务权限
 - [ ] 1.5 打通 Development Build 构建流程，在 iOS 与 Android 真机各跑通一次空应用
-- [ ] 1.6 建立开源仓库基础设施：确定并添加许可证、`.gitignore`、初始 README 骨架
+- [ ] 1.6 建立开源仓库基础设施：`LICENSE`（GPL-3.0，已确定）、`CLA.md`、`.gitignore`、初始 README 骨架均已就位；本任务剩余部分为——在源文件模板中加入 GPL 头部声明块，并接入 CLA Assistant（合并任何外部 PR 之前必须完成）
 
 ## 2. 早期技术验证（阻塞后续实现）
 
