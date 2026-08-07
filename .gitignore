@@ -47,6 +47,10 @@ coverage/
 .idea/
 *.swp
 
+# 设计源文件（Pencil 加密二进制：git 无法 diff，每次改动存全量，且贡献者没有
+# Pencil 就打不开）。源文件放本地 + 云盘同步；需要展示 UI 时导出 PNG 到 design/
+*.pen
+
 # 本地配置
 .claude/settings.local.json
 
