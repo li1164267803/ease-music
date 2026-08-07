@@ -1,0 +1,54 @@
+# 依赖
+node_modules/
+.pnpm-store/
+
+# Expo / React Native
+.expo/
+.expo-shared/
+dist/
+web-build/
+*.jsbundle
+android/
+ios/
+
+# EAS
+.easignore
+
+# 构建产物
+*.apk
+*.aab
+*.ipa
+
+# 环境变量与密钥
+.env
+.env.*
+!.env.example
+*.keystore
+!debug.keystore
+*.p8
+*.p12
+*.mobileprovision
+google-services.json
+GoogleService-Info.plist
+
+# 日志
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# 测试与缓存
+coverage/
+.cache/
+*.tsbuildinfo
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+
+# 本地配置
+.claude/settings.local.json
+
+# macOS
+.DS_Store
