@@ -50,7 +50,7 @@ GitHub 上没有同时满足「跨平台 + 自带曲库管理 + 多来源」的�
 
 **技术栈锁定**（详见 design.md 的决策记录）：
 - Expo SDK 57 / React Native 0.86，Development Build 工作流
-- `react-native-track-player` 作为播放引擎
+- `expo-audio` 作为播放引擎（原定 `react-native-track-player`，因其转为商业授权且开源版冻结而在实施阶段改选，见 design.md 决策 3）
 - `expo-sqlite` 作为曲库存储
 - EAS Build 作为构建方案
 
