@@ -1,0 +1,52 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 li1164267803 · 琥珀音乐 AmberMusic
+#
+# design.md 决策 9 派生约束 1：接受任何外部 PR 之前 CLA 必须就位。一旦合并了未签
+# CLA 的贡献，iOS 版本即失去合规上架的前提，且许可证的可逆性一并丧失。本工作流把
+# 该约束变成合并前的强制检查，而不是靠人工记得。
+#
+# 逻辑全部在 .github/scripts/cla.cjs 中，经官方的 actions/github-script 调用其内置
+# Octokit 执行，不依赖第三方 action，也不需要任何 PAT。
+
+name: CLA
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+# 同一个 PR 的触发串行执行。两个任务并发写同一个签署文件会撞 sha 冲突，而签署评论
+# 发出后紧接着来一条 recheck 是常见操作。
+#
+# 刻意**不**设 cancel-in-progress：被取消的那次运行有可能正是在写入签署记录的那次，
+# 签名就此丢失，用户还得再签一遍。排队多等几秒，比丢签名划算。
+concurrency:
+  group: cla-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    # 只处理 PR 上的评论，跳过普通 issue 的评论
+    if: github.event_name == 'pull_request_target' || github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # 写入 cla-signatures 分支上的签署记录
+      pull-requests: write # 在 PR 中发布状态评论
+      issues: write # PR 评论走的是 issues API
+      statuses: write # 设置 CLA 提交状态，供分支保护作为必需检查
+
+    steps:
+      # pull_request_target 下 checkout 取的是**基分支**而非 PR 分支。这一点是安全
+      # 前提：本任务持有写权限，绝不能检出或执行 PR 提交的代码。这里只需要仓库里
+      # 已有的脚本文件。
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const cla = require('${{ github.workspace }}/.github/scripts/cla.cjs');
+            await cla({ github, context, core });
