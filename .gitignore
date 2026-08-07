@@ -8,6 +8,9 @@ node_modules/
 dist/
 web-build/
 *.jsbundle
+expo-env.d.ts
+.metro-health-check*
+.kotlin/
 android/
 ios/
 
