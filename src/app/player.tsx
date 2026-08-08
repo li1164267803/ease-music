@@ -13,7 +13,7 @@ import {
   SkipBack,
   SkipForward,
 } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -42,13 +42,14 @@ export default function PlayerScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
-  // 拖动进度条期间用本地值，否则每 500ms 的状态回调会把滑块拽回实际播放位置
-  const [scrubbing, setScrubbing] = useState<number | null>(null);
-  useEffect(() => {
-    if (playback.state === 'loading') setScrubbing(null);
-  }, [playback.state]);
-
   const track = playback.currentTrack;
+
+  // 拖动期间用本地值，否则每 500ms 的状态回调会把滑块拽回实际播放位置。
+  // 值与曲目 id 绑定：切歌后旧的拖动位置自动失效，不需要用 effect 去清——
+  // 一个只属于某首曲目的临时值，本就不该在切歌后还存在。
+  const [scrub, setScrub] = useState<{ trackId: string; positionMs: number } | null>(null);
+  const scrubbing = scrub && scrub.trackId === track?.id ? scrub.positionMs : null;
+
   const artworkSize = width - SCREEN_PADDING * 2 - 4;
   const position = scrubbing ?? playback.positionMs;
   const duration = playback.durationMs;
@@ -104,9 +105,11 @@ export default function PlayerScreen() {
         <Slider
           value={position}
           max={duration}
-          onScrub={setScrubbing}
+          onScrub={(value) => {
+            if (track) setScrub({ trackId: track.id, positionMs: value });
+          }}
           onCommit={(value) => {
-            setScrubbing(null);
+            setScrub(null);
             void seekTo(value);
           }}
         />

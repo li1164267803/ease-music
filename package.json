@@ -24,6 +24,7 @@
     "@expo-google-fonts/inter": "^0.4.2",
     "@shopify/flash-list": "2.0.2",
     "expo": "~57.0.11",
+    "expo-asset": "~57.0.9",
     "expo-audio": "~57.0.3",
     "expo-blur": "~57.0.2",
     "expo-constants": "~57.0.9",
@@ -52,7 +53,7 @@
   "devDependencies": {
     "@types/react": "~19.2.2",
     "eslint": "^9.39.0",
-    "eslint-config-expo": "~10.0.0",
+    "eslint-config-expo": "~57.0.1",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.6.2",
     "typescript": "~6.0.3"

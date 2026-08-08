@@ -41,6 +41,12 @@ export async function importLocalFiles(): Promise<ImportSummary> {
       if (result === 'duplicate') summary.duplicates += 1;
       else summary.added.push(result);
     } catch (error) {
+      // 失败原因既要报给用户，也要留在日志里——批量导入时用户只看得到汇总。
+      console.warn(
+        '[import] 单文件失败:',
+        file.fileName,
+        error instanceof Error ? error.message : error,
+      );
       summary.failures.push({
         name: file.fileName,
         reason: error instanceof Error ? error.message : '未知错误',

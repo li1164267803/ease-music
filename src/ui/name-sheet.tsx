@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 li1164267803 · 琥珀音乐 AmberMusic
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, TextInput } from 'react-native';
 
 import { Sheet } from '@/ui/sheet';
@@ -19,33 +19,35 @@ type NameSheetProps = {
 };
 
 /** 新建与重命名歌单共用的输入弹层。 */
-export function NameSheet({
-  visible,
-  title,
-  confirmLabel,
-  initialValue = '',
-  onClose,
-  onSubmit,
-}: NameSheetProps) {
+export function NameSheet({ visible, title, initialValue = '', onClose, ...rest }: NameSheetProps) {
+  return (
+    <Sheet visible={visible} title={title} onClose={onClose}>
+      {/*
+        用 key 让表单在「打开」或「初值变化」时整体重新挂载，从而拿到新的初值。
+        重命名的初值来自异步查询，弹层打开那一刻才到位——用 effect 去同步会在
+        每次渲染后再触发一轮渲染，React 官方对这类「按 prop 重置 state」的建议
+        就是换 key 重新挂载。
+      */}
+      <NameForm
+        key={`${String(visible)}:${initialValue}`}
+        initialValue={initialValue}
+        onClose={onClose}
+        {...rest}
+      />
+    </Sheet>
+  );
+}
+
+type NameFormProps = Pick<NameSheetProps, 'confirmLabel' | 'onClose' | 'onSubmit'> & {
+  initialValue: string;
+};
+
+function NameForm({ confirmLabel, initialValue, onClose, onSubmit }: NameFormProps) {
   const [name, setName] = useState(initialValue);
   const [error, setError] = useState<string | null>(null);
 
-  // 重命名时初值来自异步查询，弹层打开的那一刻才拿得到，因此要同步进来，
-  // 否则输入框会停在上一次的内容上。
-  useEffect(() => {
-    if (visible) {
-      setName(initialValue);
-      setError(null);
-    }
-  }, [visible, initialValue]);
-
-  const close = () => {
-    setError(null);
-    onClose();
-  };
-
   return (
-    <Sheet visible={visible} title={title} onClose={close}>
+    <>
       <TextInput
         value={name}
         onChangeText={(text) => {
@@ -76,7 +78,7 @@ export function NameSheet({
         onPress={() => {
           void onSubmit(name).then((message) => {
             if (message) setError(message);
-            else close();
+            else onClose();
           });
         }}
         style={{
@@ -91,6 +93,6 @@ export function NameSheet({
           {confirmLabel}
         </AppText>
       </Pressable>
-    </Sheet>
+    </>
   );
 }

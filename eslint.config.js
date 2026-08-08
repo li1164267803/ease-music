@@ -11,7 +11,8 @@ module.exports = defineConfig([
   expoConfig,
   prettierConfig,
   {
-    ignores: ['dist/*', 'android/*', 'ios/*', 'openspec/*'],
+    // expo-env.d.ts 由 expo 自动生成，不受 GPL 头部与代码规范约束
+    ignores: ['dist/*', 'android/*', 'ios/*', 'openspec/*', 'expo-env.d.ts'],
   },
   {
     plugins: { ambermusic: { rules: { 'gpl-header': gplHeader } } },

@@ -3,7 +3,7 @@
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, Ellipsis, ListMusic, Play, Shuffle } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import ReorderableList, { reorderItems, useReorderableDrag } from 'react-native-reorderable-list';
 
@@ -49,11 +49,22 @@ export default function PlaylistDetailScreen() {
   const playlist = useLibraryQuery(() => getPlaylist(id), [id]);
   const stored = useLibraryQuery(() => listPlaylistTracks(id), [id]);
 
-  // 拖动排序需要一份本地副本才能在手指移动时即时反馈；数据库写入随后跟上。
-  const [tracks, setTracks] = useState<Track[]>([]);
-  useEffect(() => {
-    if (stored) setTracks(stored);
-  }, [stored]);
+  // 拖动松手后要立刻按新顺序渲染，否则列表会弹回原位；数据库写入与重查随后跟上。
+  // 只记「顺序」而不是整份曲目副本：曲目内容的真相始终在 stored 里，这里叠加的仅是
+  // 一个短暂的排序意图。曲目增删导致 id 集合对不上时自动作废，不需要 effect 去清。
+  const [pendingOrder, setPendingOrder] = useState<string[] | null>(null);
+
+  const tracks = useMemo(() => {
+    if (!stored) return [];
+    if (!pendingOrder || pendingOrder.length !== stored.length) return stored;
+
+    const byId = new Map(stored.map((track) => [track.id, track]));
+    const reordered = pendingOrder.flatMap((trackId) => {
+      const track = byId.get(trackId);
+      return track ? [track] : [];
+    });
+    return reordered.length === stored.length ? reordered : stored;
+  }, [stored, pendingOrder]);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -149,13 +160,10 @@ export default function PlaylistDetailScreen() {
         contentContainerStyle={{ paddingBottom: DOCK_HEIGHT }}
         showsVerticalScrollIndicator={false}
         onReorder={({ from, to }) => {
-          const reordered = reorderItems(tracks, from, to);
-          setTracks(reordered);
+          const order = reorderItems(tracks, from, to).map((track) => track.id);
+          setPendingOrder(order);
           // 顺序即刻持久化——playlist spec 要求重启后顺序保持
-          void reorderPlaylist(
-            id,
-            reordered.map((track) => track.id),
-          ).then(notifyLibraryChanged);
+          void reorderPlaylist(id, order).then(notifyLibraryChanged);
         }}
         renderItem={({ item }) => (
           <DraggableTrackRow
