@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "琥珀音乐",
-    "slug": "amber-music",
-    "scheme": "ambermusic",
+    "name": "自在音乐",
+    "slug": "ease-music",
+    "scheme": "easemusic",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
@@ -12,7 +12,7 @@
       "android"
     ],
     "ios": {
-      "bundleIdentifier": "com.ambermusic.app",
+      "bundleIdentifier": "com.easemusic.app",
       "supportsTablet": true,
       "infoPlist": {
         "UIBackgroundModes": [
@@ -21,7 +21,7 @@
       }
     },
     "android": {
-      "package": "com.ambermusic.app",
+      "package": "com.easemusic.app",
       "adaptiveIcon": {
         "backgroundColor": "#0A0A0C",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

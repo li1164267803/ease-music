@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 li1164267803 · 琥珀音乐 AmberMusic
+// Copyright (C) 2026 li1164267803 · 自在音乐 EaseMusic
 
 /**
  * design.md 决策 9 要求每个源文件头部附 GPL 声明块。用本地规则而非第三方插件实现，
@@ -11,7 +11,7 @@
  */
 
 const SPDX_LINE = '// SPDX-License-Identifier: GPL-3.0-or-later';
-const COPYRIGHT_LINE = '// Copyright (C) 2026 li1164267803 · 琥珀音乐 AmberMusic';
+const COPYRIGHT_LINE = '// Copyright (C) 2026 li1164267803 · 自在音乐 EaseMusic';
 const HEADER = `${SPDX_LINE}\n${COPYRIGHT_LINE}\n`;
 
 /** @type {import('eslint').Rule.RuleModule} */

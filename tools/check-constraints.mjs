@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 li1164267803 · 琥珀音乐 AmberMusic
+// Copyright (C) 2026 li1164267803 · 自在音乐 EaseMusic
 
 /**
  * 把 design.md 决策 7 与决策 9 的两条**持续约束**变成可重复执行的检查。

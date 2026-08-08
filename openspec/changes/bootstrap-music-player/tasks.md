@@ -1,6 +1,6 @@
 ## 1. 工程初始化
 
-- [x] 1.1 使用 Expo SDK 57 创建工程，锁定 React Native 0.86，配置 TypeScript；`app.json` 按 design.md 决策 9 写死应用标识：`name` 为「琥珀音乐」、`slug` 为 `amber-music`、`android.package` 与 `ios.bundleIdentifier` 均为 `com.ambermusic.app`
+- [x] 1.1 使用 Expo SDK 57 创建工程，锁定 React Native 0.86，配置 TypeScript；`app.json` 按 design.md 决策 9 写死应用标识：`name` 为「自在音乐」、`slug` 为 `ease-music`、`android.package` 与 `ios.bundleIdentifier` 均为 `com.easemusic.app`
 - [x] 1.2 配置 pnpm 作为包管理工具，建立目录结构与分层约定（领域层 / 来源层 / 播放层 / UI 层）
 - [x] 1.3 配置代码规范（ESLint + Prettier）与路径别名
 - [x] 1.4 安装 `expo-audio`（原定 `react-native-track-player`，改选理由见 design.md 决策 3），在 `app.json` 中配置 iOS `UIBackgroundModes: ["audio"]` 与 Android 前台服务权限
