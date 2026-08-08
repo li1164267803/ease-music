@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 li1164267803 · 琥珀音乐 AmberMusic
+// Copyright (C) 2026 li1164267803 · 自在音乐 EaseMusic
 
 import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 
 import { migrate } from '@/domain/db/migrations';
 
-const DATABASE_NAME = 'amber-music.db';
+const DATABASE_NAME = 'ease-music.db';
 
 let connection: Promise<SQLiteDatabase> | null = null;
 

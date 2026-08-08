@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 li1164267803 · 琥珀音乐 AmberMusic
+// Copyright (C) 2026 li1164267803 · 自在音乐 EaseMusic
 
 const { defineConfig } = require('eslint/config');
 const expoConfig = require('eslint-config-expo/flat');
@@ -15,8 +15,8 @@ module.exports = defineConfig([
     ignores: ['dist/*', 'android/*', 'ios/*', 'openspec/*', 'expo-env.d.ts'],
   },
   {
-    plugins: { ambermusic: { rules: { 'gpl-header': gplHeader } } },
-    rules: { 'ambermusic/gpl-header': 'error' },
+    plugins: { easemusic: { rules: { 'gpl-header': gplHeader } } },
+    rules: { 'easemusic/gpl-header': 'error' },
   },
   {
     // 这些脚本跑在 Node 里（本地命令行与 GitHub Actions），不在 React Native 运行时里，

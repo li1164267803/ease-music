@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026 li1164267803 · 琥珀音乐 AmberMusic
+# Copyright (C) 2026 li1164267803 · 自在音乐 EaseMusic
 #
 # design.md 决策 9 派生约束 1：接受任何外部 PR 之前 CLA 必须就位。一旦合并了未签
 # CLA 的贡献，iOS 版本即失去合规上架的前提，且许可证的可逆性一并丧失。本工作流把

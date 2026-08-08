@@ -1,9 +1,9 @@
 schema: spec-driven
 
 context: |
-  产品：琥珀音乐 / AmberMusic，跨平台个人音乐播放器（iOS + Android）。
-  仓库名 amber-music，包名与 Bundle ID 均为 com.ambermusic.app。英文名固定连写 AmberMusic，
-  不单独使用 Amber（避免与 GNOME Amberol 混淆）。完整功能地图与 change 路线图见 openspec/PRODUCT.md。
+  产品：自在音乐 / EaseMusic，跨平台个人音乐播放器（iOS + Android）。
+  仓库名 ease-music，包名与 Bundle ID 均为 com.easemusic.app。英文名固定连写 EaseMusic，
+  不单独使用 Ease。完整功能地图与 change 路线图见 openspec/PRODUCT.md。
 
   核心理念：音源与播放器彻底解耦——应用本身不提供、不内置、不分发任何音源，只播放用户自己
   拥有或自己指定的资源（本地文件、远程直链、个人网盘、用户自行安装的插件）。这既解决会员墙
@@ -12,7 +12,7 @@ context: |
   技术栈（已锁定，决策记录见 changes/bootstrap-music-player/design.md）：
   - Expo SDK 57 / React Native 0.86，Development Build 工作流，EAS Build 构建
   - TypeScript，pnpm 作为包管理工具
-  - react-native-track-player 作为播放引擎
+  - expo-audio 作为播放引擎（原定 react-native-track-player，因 v5 转商业授权而在实施阶段更换）
   - expo-sqlite 作为曲库存储
 
   关键架构约束：

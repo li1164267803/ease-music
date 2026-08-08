@@ -1,8 +1,8 @@
 <div align="center">
 
-# 琥珀音乐 · AmberMusic
+# 自在音乐 · EaseMusic
 
-**喜欢的歌，封存成不会消失的样子。**
+**你的歌，你说了算。**
 
 Free & open-source local music player for Android and iOS.
 **No built-in sources — it plays only the music you already own.**

@@ -22,12 +22,12 @@ CLA 只能解决贡献者的代码，解决不了第三方库——维护者无�
 
 ```ts
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 li1164267803 · 琥珀音乐 AmberMusic
+// Copyright (C) 2026 li1164267803 · 自在音乐 EaseMusic
 ```
 
 版权人固定写维护者本人——依 CLA，外部贡献经授权后由维护者作为唯一版权持有人对外分发，这是 iOS 合规上架的前提，因此这一行不随贡献者变化。
 
-该约束由 ESLint 强制执行（规则 `ambermusic/gpl-header`，实现在 `tools/eslint-rules/`），**可自动修复**：
+该约束由 ESLint 强制执行（规则 `easemusic/gpl-header`，实现在 `tools/eslint-rules/`），**可自动修复**：
 
 ```bash
 pnpm lint --fix
@@ -73,10 +73,10 @@ pnpm format      # prettier --write
 
 ```bash
 # 取消 main 的分支保护
-gh api --method DELETE repos/li1164267803/amber-music/branches/main/protection
+gh api --method DELETE repos/li1164267803/ease-music/branches/main/protection
 
 # 把 workflow 默认权限调回只读
-gh api --method PUT repos/li1164267803/amber-music/actions/permissions/workflow \
+gh api --method PUT repos/li1164267803/ease-music/actions/permissions/workflow \
   -F default_workflow_permissions=read
 ```
 
