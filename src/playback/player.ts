@@ -51,6 +51,21 @@ let consecutiveFailures = 0;
 let lastReportedError: string | null = null;
 /** 每次切歌自增，用于丢弃已过期的异步解析结果。 */
 let loadToken = 0;
+/**
+ * 正在等待引擎跟进的 seek 目标。
+ *
+ * 引擎完成跳转要一小段时间，这期间 500ms 一次的状态回调报的仍是跳转前的位置。
+ * 不挡掉的话，进度条会先弹回原处、再跳到目标，表现为点一下来回闪。
+ *
+ * `until` 是兜底：seek 万一没生效（例如曲目还在装载），到点就放弃遮挡、让位置跳回
+ * 引擎的真实回报——进度条永久停在一个假位置比闪一下更糟。
+ */
+let pendingSeek: { positionMs: number; until: number } | null = null;
+
+/** 认为引擎已追上目标的容差。状态回调间隔 500ms，播放中一拍的位移就是这个量级。 */
+const SEEK_SETTLE_TOLERANCE_MS = 800;
+/** 遮挡的最长时间，超过就认为这次 seek 没落地。 */
+const SEEK_SETTLE_TIMEOUT_MS = 1500;
 
 function publish(patch: Partial<PlaybackSnapshot>): void {
   snapshot = { ...snapshot, ...patch };
@@ -110,9 +125,18 @@ function onStatus(status: AudioStatus): void {
   }
   lastReportedError = null;
 
+  const reportedMs = Math.round(status.currentTime * 1000);
+  let positionMs = reportedMs;
+
+  if (pendingSeek) {
+    const caughtUp = Math.abs(reportedMs - pendingSeek.positionMs) <= SEEK_SETTLE_TOLERANCE_MS;
+    if (caughtUp || Date.now() > pendingSeek.until) pendingSeek = null;
+    else positionMs = pendingSeek.positionMs;
+  }
+
   publish({
     state: toState(status),
-    positionMs: Math.round(status.currentTime * 1000),
+    positionMs,
     // duration 在加载完成前为 0，此时优先用曲库里已解析出的时长，
     // 进度条不会从「未知总长」跳变成实际值。
     durationMs:
@@ -178,6 +202,7 @@ export async function removeFromQueue(index: number): Promise<void> {
 
   if (queue.length === 0) {
     player?.pause();
+    pendingSeek = null;
     publish({ queue, currentIndex: -1, currentTrack: null, state: 'idle', positionMs: 0 });
     return;
   }
@@ -190,6 +215,7 @@ export async function removeFromQueue(index: number): Promise<void> {
     const target = order.order[order.position];
     if (target === undefined) {
       player?.pause();
+      pendingSeek = null;
       publish({ currentIndex: -1, currentTrack: null, state: 'idle', positionMs: 0 });
     } else {
       await load(target, { autoPlay: snapshot.state === 'playing' });
@@ -200,6 +226,7 @@ export async function removeFromQueue(index: number): Promise<void> {
 export function clearQueue(): void {
   player?.pause();
   order = { order: [], position: -1 };
+  pendingSeek = null;
   publish({ queue: [], currentIndex: -1, currentTrack: null, state: 'idle', positionMs: 0 });
 }
 
@@ -240,8 +267,14 @@ async function advance(direction: 1 | -1, auto: boolean): Promise<void> {
 
 export async function seekTo(positionMs: number): Promise<void> {
   if (!player || !snapshot.currentTrack) return;
-  await player.seekTo(Math.max(positionMs, 0) / 1000);
-  publish({ positionMs });
+
+  const target = Math.max(positionMs, 0);
+  // 先把目标位置发出去，再等引擎跳转：界面松手那一刻就要看到新位置，
+  // 否则这段等待里读到的还是旧位置，进度条会回弹一下。
+  pendingSeek = { positionMs: target, until: Date.now() + SEEK_SETTLE_TIMEOUT_MS };
+  publish({ positionMs: target });
+
+  await player.seekTo(target / 1000);
 }
 
 export async function setPlayMode(mode: PlayMode): Promise<void> {
@@ -260,6 +293,7 @@ async function load(index: number, { autoPlay }: { autoPlay: boolean }): Promise
   if (!track || !player) return;
 
   const token = (loadToken += 1);
+  pendingSeek = null;
   publish({
     currentIndex: index,
     currentTrack: track,
