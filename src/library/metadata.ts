@@ -21,11 +21,17 @@ export type ParsedMetadata = {
 const HEAD_BYTES = 512 * 1024;
 
 /**
+ * 头部解析出的时长顶多能有多"长"才算可信，见 `durationSurvivesTruncation`。
+ * 只要大于 1 就不会误信截断值，留一成余量是为了避开取整带来的抖动。
+ */
+const DURATION_TRUST_MARGIN = 1.1;
+
+/**
  * 解析音频文件的内嵌元数据。
  *
  * 采用「先读头部，不够再读全文件」两段式：M4A 的 moov 原子可能位于文件末尾，
  * 缺少 Xing 头的 CBR MP3 也要扫完整个文件才能算出准确时长，这两种情况下头部解析
- * 会失败或缺时长，此时才退回整文件读取。
+ * 会失败或给不出可信的时长，此时才退回整文件读取。
  *
  * 解析失败一律返回 null 而不抛出——music-library spec 要求解析失败时降级到文件名，
  * 且批量导入中单个文件失败不影响其余文件。
@@ -33,13 +39,39 @@ const HEAD_BYTES = 512 * 1024;
 export async function parseAudioMetadata(uri: string): Promise<ParsedMetadata | null> {
   const head = await readHead(uri);
   if (head) {
-    const parsed = await tryParse(head);
-    if (parsed?.durationMs != null) return parsed;
+    const parsed = await tryParse(head.bytes);
+    if (parsed && durationSurvivesTruncation(parsed, head)) return parsed.metadata;
   }
 
   const whole = await readWhole(uri);
   if (!whole) return null;
-  return tryParse(whole);
+  return (await tryParse(whole))?.metadata ?? null;
+}
+
+/**
+ * 头部解析出的时长是否可信。
+ *
+ * 只读了文件的一段时，`music-metadata` 对没有 Xing/Info 头的 CBR MP3 会按「手上这些
+ * 字节能装多长音频」折算出一个时长——它不为空，却只是所读那一段的长度。原先的判断只
+ * 看时长是否为空，这类文件因此永远走不到整文件重读：实测一首 7 分 06 秒、192kbps 无
+ * Xing 头的 MP3 被记成 22 秒，正是 512KB 按该码率折算出来的值。
+ *
+ * 判据：读到的字节按当前码率最多能承载多长音频，时长若没有明显超过这个上限，就说明它
+ * 可能是按截断的流算出来的，不可信；明显超过则只可能来自文件头里的显式时长（MP3 的
+ * Xing、FLAC 的 STREAMINFO、M4A 的 moov），可信。
+ *
+ * 判错的方向是安全的：误判为不可信只会多读一次整文件，结果依然正确；而截断折算出的
+ * 时长在数值上不可能超过这个上限，所以不会反过来误信。
+ */
+function durationSurvivesTruncation(parsed: ParseResult, head: HeadRead): boolean {
+  if (parsed.metadata.durationMs == null) return false;
+  // 整个文件都在手上，解析结果就是全部真相
+  if (!head.truncated) return true;
+  // 码率未知就无从判断上限，按不可信处理，让整文件重读给出答案
+  if (!parsed.bitrate) return false;
+
+  const readableMs = (head.bytes.length * 8 * 1000) / parsed.bitrate;
+  return parsed.metadata.durationMs > readableMs * DURATION_TRUST_MARGIN;
 }
 
 /**
@@ -75,7 +107,10 @@ function sniffExtension(bytes: Uint8Array): string | null {
   return null;
 }
 
-async function tryParse(bytes: Uint8Array): Promise<ParsedMetadata | null> {
+/** 解析结果附带码率，仅用于判断截断读取下的时长是否可信，不对外暴露。 */
+type ParseResult = { metadata: ParsedMetadata; bitrate: number | null };
+
+async function tryParse(bytes: Uint8Array): Promise<ParseResult | null> {
   try {
     const extension = sniffExtension(bytes);
     if (!extension) {
@@ -86,12 +121,15 @@ async function tryParse(bytes: Uint8Array): Promise<ParsedMetadata | null> {
 
     const { common, format } = await parseBuffer(bytes, { path: `audio${extension}` });
     return {
-      title: nonEmpty(common.title),
-      artist: nonEmpty(common.artist),
-      album: nonEmpty(common.album),
-      durationMs: format.duration != null ? Math.round(format.duration * 1000) : null,
-      trackNumber: common.track?.no ?? null,
-      picture: common.picture?.[0] ?? null,
+      metadata: {
+        title: nonEmpty(common.title),
+        artist: nonEmpty(common.artist),
+        album: nonEmpty(common.album),
+        durationMs: format.duration != null ? Math.round(format.duration * 1000) : null,
+        trackNumber: common.track?.no ?? null,
+        picture: common.picture?.[0] ?? null,
+      },
+      bitrate: format.bitrate ?? null,
     };
   } catch (error) {
     // 解析失败是预期路径（会降级到文件名），但静默吞掉会让线上问题无从查起。
@@ -100,17 +138,23 @@ async function tryParse(bytes: Uint8Array): Promise<ParsedMetadata | null> {
   }
 }
 
-async function readHead(uri: string): Promise<Uint8Array | null> {
+/** `truncated` 表示后面还有没读到的字节，据此判断时长是否可能是折算出来的。 */
+type HeadRead = { bytes: Uint8Array; truncated: boolean };
+
+async function readHead(uri: string): Promise<HeadRead | null> {
   try {
     const file = new File(uri);
     if (!file.exists) return null;
 
     const size = file.size ?? 0;
-    if (size > 0 && size <= HEAD_BYTES) return await file.bytes();
+    if (size > 0 && size <= HEAD_BYTES) return { bytes: await file.bytes(), truncated: false };
 
     const handle = file.open();
     try {
-      return handle.readBytes(HEAD_BYTES);
+      const bytes = handle.readBytes(HEAD_BYTES);
+      // 不拿 size 判断：部分 content:// 提供方不报大小。读满即认为后面还有，
+      // 读不满说明已到文件末尾。
+      return { bytes, truncated: bytes.length >= HEAD_BYTES };
     } finally {
       handle.close();
     }
