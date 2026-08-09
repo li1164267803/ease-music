@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { View, type LayoutChangeEvent } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { runOnJS } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { Colors } from '@/ui/theme';
 
@@ -28,6 +28,16 @@ export function Slider({ value, max, onScrub, onCommit }: SliderProps) {
 
   const ratio = max > 0 ? Math.min(Math.max(value / max, 0), 1) : 0;
 
+  /**
+   * 换算与回调都留在 JS 线程。
+   *
+   * 手势回调会被编译成 worklet 跑在 UI 线程，在那里同步调用这类普通闭包会直接抛
+   * 「Tried to synchronously call a Remote Function」；而且换算要读 `width` 这个
+   * React state，它本来就只存在于 JS 线程。因此 UI 线程只负责把原始 x 交回来。
+   */
+  const scrubAt = (x: number) => onScrub(toValue(x));
+  const commitAt = (x: number) => onCommit(toValue(x));
+
   const toValue = (x: number) => {
     if (width <= 0 || max <= 0) return 0;
     return Math.round(Math.min(Math.max(x / width, 0), 1) * max);
@@ -36,10 +46,11 @@ export function Slider({ value, max, onScrub, onCommit }: SliderProps) {
   const gesture = Gesture.Pan()
     // 允许原地按下就开始，用户点轨道任意位置即可跳转
     .minDistance(0)
-    .onBegin((event) => runOnJS(onScrub)(toValue(event.x)))
-    .onUpdate((event) => runOnJS(onScrub)(toValue(event.x)))
-    .onEnd((event) => runOnJS(onCommit)(toValue(event.x)))
-    .onFinalize((event) => runOnJS(onCommit)(toValue(event.x)));
+    .onBegin((event) => scheduleOnRN(scrubAt, event.x))
+    .onUpdate((event) => scheduleOnRN(scrubAt, event.x))
+    // 只用 onFinalize 落定：它在正常结束与被打断时都会触发，而 onEnd 只覆盖前者。
+    // 两个都接会让一次拖动 seek 两遍。
+    .onFinalize((event) => scheduleOnRN(commitAt, event.x));
 
   const onLayout = (event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width);
 
