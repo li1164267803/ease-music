@@ -94,7 +94,7 @@ export function ImportSheet({ visible, onClose }: ImportSheetProps) {
               fontFamily: Font.regular,
               fontSize: 13,
               borderWidth: 1,
-              borderColor: invalid ? '#FF6B6B' : 'transparent',
+              borderColor: invalid ? Colors.danger : 'transparent',
             }}
           />
           <Pressable
@@ -118,7 +118,7 @@ export function ImportSheet({ visible, onClose }: ImportSheetProps) {
 
       {busy ? <ActivityIndicator color={Colors.accent} /> : null}
       {message ? (
-        <AppText size={12} color={invalid ? '#FF6B6B' : Colors.textMuted}>
+        <AppText size={12} color={invalid ? Colors.danger : Colors.textMuted}>
           {message}
         </AppText>
       ) : null}

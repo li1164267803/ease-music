@@ -2,7 +2,15 @@
 // Copyright (C) 2026 li1164267803 · 自在音乐 EaseMusic
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, Ellipsis, ListMusic, Play, Shuffle } from 'lucide-react-native';
+import {
+  ArrowDownToLine,
+  ChevronLeft,
+  Ellipsis,
+  Heart,
+  Play,
+  Search,
+  Shuffle,
+} from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import ReorderableList, { reorderItems, useReorderableDrag } from 'react-native-reorderable-list';
@@ -19,26 +27,31 @@ import { playPlaylist } from '@/library/actions';
 import { notifyLibraryChanged, useLibraryQuery } from '@/library/store';
 import { setPlayMode } from '@/playback/player';
 import { usePlayback } from '@/playback/use-playback';
+import { Artwork } from '@/ui/artwork';
+import { CircleButton } from '@/ui/circle-button';
+import { formatRelativeDay, formatTotalDuration } from '@/ui/format';
+import { IndexedTrackRow } from '@/ui/indexed-track-row';
+import { FloatingMiniPlayer } from '@/ui/mini-player';
 import { NameSheet } from '@/ui/name-sheet';
 import { Screen } from '@/ui/screen';
 import { Sheet, SheetAction } from '@/ui/sheet';
 import { AppText } from '@/ui/text';
-import { Colors, DOCK_HEIGHT } from '@/ui/theme';
+import { Colors, MINI_DOCK_HEIGHT } from '@/ui/theme';
 import { TrackActionsSheet } from '@/ui/track-actions-sheet';
-import { TrackRow } from '@/ui/track-row';
 
 /**
  * 长按进入拖动。`useReorderableDrag` 只能在列表项内部调用，因此单独包一层，
- * 而不是把拖动手柄的概念泄漏进通用的 TrackRow。
+ * 而不是把拖动手柄的概念泄漏进通用的行组件。
  */
 function DraggableTrackRow(props: {
   track: Track;
+  position: number;
   active: boolean;
   onPress: () => void;
   onMore: () => void;
 }) {
   const drag = useReorderableDrag();
-  return <TrackRow {...props} onLongPress={drag} />;
+  return <IndexedTrackRow {...props} onLongPress={drag} />;
 }
 
 export default function PlaylistDetailScreen() {
@@ -77,55 +90,64 @@ export default function PlaylistDetailScreen() {
     setNotice(result.ok ? null : result.reason);
   };
 
+  const total = formatTotalDuration(playlist?.durationMs ?? null);
+
   return (
     <Screen gap={22}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <Pressable onPress={() => router.back()} hitSlop={10}>
           <ChevronLeft size={24} color={Colors.text} />
         </Pressable>
-        <Pressable onPress={() => setMenuOpen(true)} hitSlop={10}>
-          <Ellipsis size={22} color={Colors.text} />
-        </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+          {/* 歌单内搜索尚未实现，先渲染出设计稿的位置 */}
+          <Search size={22} color={Colors.text} />
+          <Pressable onPress={() => setMenuOpen(true)} hitSlop={10}>
+            <Ellipsis size={22} color={Colors.text} />
+          </Pressable>
+        </View>
       </View>
 
-      <View style={{ flexDirection: 'row', gap: 18 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 18 }}>
         <View
           style={{
-            width: 150,
-            height: 150,
             borderRadius: 20,
-            backgroundColor: Colors.surface2,
-            alignItems: 'center',
-            justifyContent: 'center',
+            shadowColor: '#000000',
+            shadowOpacity: 0.4,
+            shadowRadius: 17,
+            shadowOffset: { width: 0, height: 14 },
+            elevation: 12,
           }}
         >
-          <ListMusic size={44} color={Colors.textMuted} />
+          <Artwork uri={playlist?.coverUri ?? null} width={150} height={150} radius={20} />
         </View>
-        <View style={{ flex: 1, gap: 7, justifyContent: 'center' }}>
-          <AppText size={11} weight="semibold" color={Colors.accent}>
+        <View style={{ flex: 1, gap: 7 }}>
+          <AppText size={11} weight="semibold" color={Colors.accent} letterSpacing={1}>
             歌单
           </AppText>
-          <AppText size={27} weight="bold" numberOfLines={2}>
+          <AppText size={27} weight="bold" letterSpacing={-0.5} lineHeight={31} numberOfLines={2}>
             {playlist?.name ?? ''}
           </AppText>
-          <AppText size={12} color={Colors.textMuted}>
-            {tracks.length} 首
+          <AppText size={12} color={Colors.textMuted} lineHeight={18}>
+            {total ? `${tracks.length} 首 · ${total}` : `${tracks.length} 首`}
+            {'\n'}
+            {playlist ? `创建于${formatRelativeDay(playlist.createdAt)}` : ''}
           </AppText>
         </View>
       </View>
 
-      <View style={{ flexDirection: 'row', gap: 12 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <Pressable
           onPress={() => void start(false)}
           style={{
             flex: 1,
-            height: 46,
             borderRadius: 24,
             backgroundColor: Colors.accent,
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'center',
             gap: 8,
+            paddingVertical: 13,
+            paddingHorizontal: 22,
           }}
         >
           <Play size={17} color={Colors.bg} fill={Colors.bg} />
@@ -133,19 +155,10 @@ export default function PlaylistDetailScreen() {
             播放全部
           </AppText>
         </Pressable>
-        <Pressable
-          onPress={() => void start(true)}
-          style={{
-            width: 46,
-            height: 46,
-            borderRadius: 23,
-            backgroundColor: Colors.surface,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Shuffle size={18} color={Colors.text} />
-        </Pressable>
+        <CircleButton Icon={Shuffle} size={46} iconSize={18} onPress={() => void start(true)} />
+        {/* 收藏与下载分别依赖后续的曲库字段与 C2 离线缓存，先只呈现设计稿的位置 */}
+        <CircleButton Icon={Heart} size={46} iconSize={18} />
+        <CircleButton Icon={ArrowDownToLine} size={46} iconSize={18} />
       </View>
 
       {notice ? (
@@ -157,7 +170,7 @@ export default function PlaylistDetailScreen() {
       <ReorderableList
         data={tracks}
         keyExtractor={(track) => track.id}
-        contentContainerStyle={{ paddingBottom: DOCK_HEIGHT }}
+        contentContainerStyle={{ paddingBottom: MINI_DOCK_HEIGHT, gap: 2 }}
         showsVerticalScrollIndicator={false}
         onReorder={({ from, to }) => {
           const order = reorderItems(tracks, from, to).map((track) => track.id);
@@ -165,9 +178,10 @@ export default function PlaylistDetailScreen() {
           // 顺序即刻持久化——playlist spec 要求重启后顺序保持
           void reorderPlaylist(id, order).then(notifyLibraryChanged);
         }}
-        renderItem={({ item }) => (
+        renderItem={({ item, index }) => (
           <DraggableTrackRow
             track={item}
+            position={index + 1}
             active={playback.currentTrack?.id === item.id}
             onPress={() => void playPlaylist(id, item.id)}
             onMore={() => setActionsFor(item)}
@@ -212,6 +226,8 @@ export default function PlaylistDetailScreen() {
       />
 
       <TrackActionsSheet track={actionsFor} playlistId={id} onClose={() => setActionsFor(null)} />
+
+      <FloatingMiniPlayer />
     </Screen>
   );
 }

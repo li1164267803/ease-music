@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 li1164267803 · 自在音乐 EaseMusic
 
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 
 import type { Playlist } from '@/domain/model/playlist';
 import { listPlaylists } from '@/domain/repository/playlist-repository';
@@ -69,6 +69,47 @@ export function usePlaylists(): Playlist[] {
 
   return playlists;
 }
+
+/**
+ * 按专辑或艺人聚合出的曲目集合。
+ *
+ * 曲库里没有「专辑」「艺人」这两张表——它们是曲目元数据的两个视角，由曲目现聚合
+ * 而来。建表反而要额外维护一份随曲目增删而变的副本，而聚合的成本只与曲库规模
+ * 相关，本地曲库的量级下不构成负担。
+ */
+export type Collection = {
+  name: string;
+  meta: string;
+  coverUri: string | null;
+  tracks: Track[];
+};
+
+export type CollectionKind = 'album' | 'artist';
+
+export function useCollections(kind: CollectionKind): Collection[] {
+  const tracks = useTracks('title', '');
+
+  return useMemo(() => {
+    const groups = new Map<string, Track[]>();
+    for (const track of tracks) {
+      const name = (kind === 'album' ? track.album : track.artist) ?? UNKNOWN[kind];
+      const existing = groups.get(name);
+      if (existing) existing.push(track);
+      else groups.set(name, [track]);
+    }
+
+    return [...groups]
+      .map(([name, items]) => ({
+        name,
+        meta: kind === 'album' ? (items[0]?.artist ?? UNKNOWN.artist) : `${items.length} 首`,
+        coverUri: items.find((item) => item.artworkUri)?.artworkUri ?? null,
+        tracks: items,
+      }))
+      .sort((a, b) => b.tracks.length - a.tracks.length);
+  }, [tracks, kind]);
+}
+
+const UNKNOWN: Record<CollectionKind, string> = { album: '未知专辑', artist: '未知艺术家' };
 
 /** 通用的「跟随曲库变更重查」封装，供歌单详情等按 id 取数的页面使用。 */
 export function useLibraryQuery<T>(query: () => Promise<T>, deps: readonly unknown[]): T | null {

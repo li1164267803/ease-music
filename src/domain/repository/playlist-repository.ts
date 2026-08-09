@@ -12,6 +12,8 @@ type PlaylistRow = {
   name: string;
   created_at: number;
   track_count: number;
+  cover_uri: string | null;
+  duration_ms: number | null;
 };
 
 type PlaylistTrackRow = {
@@ -31,12 +33,26 @@ type PlaylistTrackRow = {
 
 const LIST_QUERY = `
   SELECT p.id, p.name, p.created_at,
-         (SELECT COUNT(*) FROM playlist_tracks pt WHERE pt.playlist_id = p.id) AS track_count
+         (SELECT COUNT(*) FROM playlist_tracks pt WHERE pt.playlist_id = p.id) AS track_count,
+         (SELECT t.artwork_uri
+            FROM playlist_tracks pt JOIN tracks t ON t.id = pt.track_id
+           WHERE pt.playlist_id = p.id AND t.artwork_uri IS NOT NULL
+           ORDER BY pt.position ASC LIMIT 1) AS cover_uri,
+         (SELECT SUM(t.duration_ms)
+            FROM playlist_tracks pt JOIN tracks t ON t.id = pt.track_id
+           WHERE pt.playlist_id = p.id) AS duration_ms
   FROM playlists p
 `;
 
 function toPlaylist(row: PlaylistRow): Playlist {
-  return { id: row.id, name: row.name, createdAt: row.created_at, trackCount: row.track_count };
+  return {
+    id: row.id,
+    name: row.name,
+    createdAt: row.created_at,
+    trackCount: row.track_count,
+    coverUri: row.cover_uri,
+    durationMs: row.duration_ms,
+  };
 }
 
 function toTrack(row: PlaylistTrackRow): Track {
@@ -81,7 +97,14 @@ export async function createPlaylist(rawName: string): Promise<Playlist | null> 
   const name = normalizePlaylistName(rawName);
   if (!name) return null;
 
-  const playlist: Playlist = { id: randomUUID(), name, createdAt: Date.now(), trackCount: 0 };
+  const playlist: Playlist = {
+    id: randomUUID(),
+    name,
+    createdAt: Date.now(),
+    trackCount: 0,
+    coverUri: null,
+    durationMs: null,
+  };
   const db = await getDatabase();
   await db.runAsync('INSERT INTO playlists (id, name, created_at) VALUES (?, ?, ?)', [
     playlist.id,

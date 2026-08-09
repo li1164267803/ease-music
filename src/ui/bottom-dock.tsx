@@ -2,19 +2,21 @@
 // Copyright (C) 2026 li1164267803 · 自在音乐 EaseMusic
 
 import { BlurView } from 'expo-blur';
-import { useRouter } from 'expo-router';
-import { ListMusic, LibraryBig, ListOrdered, Pause, Play, SkipForward } from 'lucide-react-native';
+import { House, LibraryBig, Search, UserRound } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { next, togglePlayPause } from '@/playback/player';
-import { usePlayback } from '@/playback/use-playback';
-import { Artwork } from '@/ui/artwork';
+import { MiniPlayer } from '@/ui/mini-player';
 import { AppText } from '@/ui/text';
 import { Colors } from '@/ui/theme';
 
-const TAB_ICONS = { index: LibraryBig, playlists: ListMusic, queue: ListOrdered } as const;
-const TAB_LABELS = { index: '曲库', playlists: '歌单', queue: '播放队列' } as const;
+const TAB_ICONS = {
+  index: House,
+  search: Search,
+  library: LibraryBig,
+  profile: UserRound,
+} as const;
+const TAB_LABELS = { index: '发现', search: '搜索', library: '音乐库', profile: '我的' } as const;
 
 type TabName = keyof typeof TAB_ICONS;
 
@@ -27,17 +29,9 @@ type TabBarProps = {
   navigation: { navigate: (name: string) => void };
 };
 
-/**
- * 设计稿的 Bottom Dock：迷你播放器与标签栏叠成一组悬浮在内容之上。
- *
- * 标签栏的目的地按 C1 的实际能力取——设计稿画的是「发现 / 搜索 / 音乐库 / 我的」，
- * 但本产品不提供音源，「发现」没有内容可发现；搜索属于曲库页内部的能力而非独立
- * 目的地。视觉规格（尺寸、圆角、模糊、描边、字号）逐值照搬设计稿。
- */
+/** 设计稿的 Bottom Dock：迷你播放器与标签栏叠成一组悬浮在内容之上。 */
 export function BottomDock({ state, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
-  const playback = usePlayback();
-  const router = useRouter();
 
   return (
     <View
@@ -51,92 +45,66 @@ export function BottomDock({ state, navigation }: TabBarProps) {
         gap: 8,
       }}
     >
-      {playback.currentTrack ? (
-        <Pressable
-          onPress={() => router.push('/player')}
-          style={{
-            height: 58,
-            borderRadius: 18,
-            backgroundColor: Colors.surface,
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 12,
-          }}
-        >
-          <Artwork uri={playback.currentTrack.artworkUri} size={42} radius={11} />
-          <View style={{ flex: 1, gap: 2 }}>
-            <AppText size={13} weight="semibold" numberOfLines={1}>
-              {playback.currentTrack.title}
-            </AppText>
-            <AppText size={11} color={Colors.textMuted} numberOfLines={1}>
-              {playback.state === 'buffering'
-                ? '缓冲中…'
-                : (playback.currentTrack.artist ?? '未知艺术家')}
-            </AppText>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingRight: 4 }}>
-            <Pressable onPress={() => void togglePlayPause()} hitSlop={8}>
-              {playback.state === 'playing' ? (
-                <Pause size={19} color={Colors.text} fill={Colors.text} />
-              ) : (
-                <Play size={19} color={Colors.text} fill={Colors.text} />
-              )}
-            </Pressable>
-            <Pressable onPress={() => void next()} hitSlop={8}>
-              <SkipForward size={19} color={Colors.text} fill={Colors.text} />
-            </Pressable>
-          </View>
-        </Pressable>
-      ) : null}
+      <MiniPlayer />
 
-      <BlurView
-        intensity={24}
-        tint="dark"
+      {/* 阴影挂在外层：模糊层本身要 overflow:hidden 裁圆角，阴影画不出来 */}
+      <View
         style={{
-          height: 60,
           borderRadius: 30,
-          overflow: 'hidden',
-          backgroundColor: Colors.dock,
-          borderWidth: 1,
-          borderColor: Colors.dockBorder,
-          padding: 2,
-          flexDirection: 'row',
-          alignItems: 'center',
+          shadowColor: '#000000',
+          shadowOpacity: 0.35,
+          shadowRadius: 15,
+          shadowOffset: { width: 0, height: 10 },
+          elevation: 12,
         }}
       >
-        {state.routes.map((route, index) => {
-          const name = route.name as TabName;
-          const Icon = TAB_ICONS[name];
-          if (!Icon) return null;
+        <BlurView
+          intensity={24}
+          tint="dark"
+          style={{
+            height: 60,
+            borderRadius: 30,
+            overflow: 'hidden',
+            backgroundColor: Colors.dock,
+            borderWidth: 1,
+            borderColor: Colors.dockBorder,
+            padding: 2,
+            flexDirection: 'row',
+            alignItems: 'center',
+          }}
+        >
+          {state.routes.map((route, index) => {
+            const name = route.name as TabName;
+            const Icon = TAB_ICONS[name];
+            if (!Icon) return null;
 
-          const focused = state.index === index;
-          const color = focused ? Colors.accent : Colors.textMuted;
+            const focused = state.index === index;
+            const color = focused ? Colors.accent : Colors.textMuted;
 
-          return (
-            <Pressable
-              key={route.key}
-              onPress={() => navigation.navigate(route.name)}
-              style={{
-                flex: 1,
-                borderRadius: 20,
-                paddingVertical: 7,
-                paddingHorizontal: 16,
-                gap: 3,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: focused ? Colors.accentSoft : 'transparent',
-              }}
-            >
-              <Icon size={21} color={color} />
-              <AppText size={10} weight="medium" color={color}>
-                {TAB_LABELS[name]}
-              </AppText>
-            </Pressable>
-          );
-        })}
-      </BlurView>
+            return (
+              <Pressable
+                key={route.key}
+                onPress={() => navigation.navigate(route.name)}
+                style={{
+                  flex: 1,
+                  borderRadius: 20,
+                  paddingVertical: 7,
+                  paddingHorizontal: 16,
+                  gap: 3,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: focused ? Colors.accentSoft : 'transparent',
+                }}
+              >
+                <Icon size={21} color={color} />
+                <AppText size={10} weight={focused ? 'semibold' : 'medium'} color={color}>
+                  {TAB_LABELS[name]}
+                </AppText>
+              </Pressable>
+            );
+          })}
+        </BlurView>
+      </View>
     </View>
   );
 }
