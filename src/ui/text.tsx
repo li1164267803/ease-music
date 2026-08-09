@@ -11,7 +11,10 @@ export type AppTextProps = TextProps & {
   size?: number;
   weight?: Weight;
   color?: string;
+  /** 绝对行高，直接填设计稿给出的 px 值 */
   lineHeight?: number;
+  /** 设计稿的 letter-spacing，负值用于大字号标题 */
+  letterSpacing?: number;
 };
 
 /**
@@ -23,6 +26,7 @@ export function AppText({
   weight = 'regular',
   color = Colors.text,
   lineHeight,
+  letterSpacing,
   style,
   ...rest
 }: AppTextProps) {
@@ -30,7 +34,8 @@ export function AppText({
     fontFamily: Font[weight],
     fontSize: size,
     color,
-    ...(lineHeight === undefined ? null : { lineHeight: size * lineHeight }),
+    ...(lineHeight === undefined ? null : { lineHeight }),
+    ...(letterSpacing === undefined ? null : { letterSpacing }),
   };
   return <Text style={[base, style]} {...rest} />;
 }

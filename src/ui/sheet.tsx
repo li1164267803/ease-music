@@ -61,7 +61,7 @@ export function SheetAction({ label, hint, danger = false, onPress }: SheetActio
         gap: 3,
       }}
     >
-      <AppText size={14} weight="medium" color={danger ? '#FF6B6B' : Colors.text}>
+      <AppText size={14} weight="medium" color={danger ? Colors.danger : Colors.text}>
         {label}
       </AppText>
       {hint ? (

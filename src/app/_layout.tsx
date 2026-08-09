@@ -50,6 +50,7 @@ export default function RootLayout() {
             name="player"
             options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
           />
+          <Stack.Screen name="queue" />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>

@@ -13,8 +13,9 @@ export default function TabsLayout() {
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: Colors.bg } }}
     >
       <Tabs.Screen name="index" />
-      <Tabs.Screen name="playlists" />
-      <Tabs.Screen name="queue" />
+      <Tabs.Screen name="search" />
+      <Tabs.Screen name="library" />
+      <Tabs.Screen name="profile" />
     </Tabs>
   );
 }

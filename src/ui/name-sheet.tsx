@@ -66,7 +66,7 @@ function NameForm({ confirmLabel, initialValue, onClose, onSubmit }: NameFormPro
           fontFamily: Font.regular,
           fontSize: 14,
           borderWidth: 1,
-          borderColor: error ? '#FF6B6B' : 'transparent',
+          borderColor: error ? Colors.danger : 'transparent',
         }}
       />
       {error ? (
