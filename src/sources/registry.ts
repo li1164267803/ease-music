@@ -7,20 +7,46 @@ import { localFileSource } from '@/sources/local-file';
 import { remoteUrlSource } from '@/sources/remote-url';
 
 /**
- * 来源注册表。
+ * 来源注册表。容纳两类来源（media-source spec「来源注册与归属识别」）：
  *
- * media-source spec 的扩展约束：新增来源 MUST 能够仅通过实现解析契约与注册来源标识
- * 接入，MUST NOT 要求修改曲库、播放器或 UI 层的既有代码。本文件是唯一需要改动的
- * 地方——C5 网盘与 C6 插件来源届时在这里追加一项即可。
+ * - **内置来源**：随应用一同确定，整个生命周期内常驻，不可注销
+ * - **动态来源**：由用户在运行时安装/卸载，数量与标识运行时才确定
  *
- * 插件来源（C6）在 iOS 构建中会被整体裁剪（决策 7）。届时它以条件注册的形式接入，
- * 注册表缺项时的行为已由 `getSource` 返回 undefined + resolve 报错覆盖，
- * 不需要为裁剪场景写任何特例。
+ * 动态来源目前只有插件，而**一个插件即一个来源**（design.md 决策 2）：曲库的去重键是
+ * `sourceId + sourceKey`，若所有插件共用一个 sourceId，不同插件返回的同 id 曲目会被
+ * 误判为同一首，卸载单个插件时也无法定位其存量曲目。
+ *
+ * 本文件不认识插件——注册是反向的，由插件模块在安装/卸载时调用下面两个函数。这样
+ * `src/sources` 不引用 `src/plugins`，iOS 侧的引用链自然断开（决策 6）。
  */
-const SOURCES: readonly MediaSource[] = [localFileSource, remoteUrlSource];
+const BUILT_IN: readonly MediaSource[] = [localFileSource, remoteUrlSource];
 
-const BY_ID = new Map<SourceId, MediaSource>(SOURCES.map((source) => [source.id, source]));
+const BUILT_IN_IDS: ReadonlySet<SourceId> = new Set(BUILT_IN.map((source) => source.id));
+
+const REGISTRY = new Map<SourceId, MediaSource>(BUILT_IN.map((source) => [source.id, source]));
 
 export function getSource(id: SourceId): MediaSource | undefined {
-  return BY_ID.get(id);
+  return REGISTRY.get(id);
+}
+
+/**
+ * 注册一个动态来源。同标识重复注册按替换处理——插件更新到新版本时正是这条路径。
+ *
+ * 内置标识不可被占用：插件自述的插件名恰好叫 `local-file` 时若允许覆盖，
+ * 用户全部的本地文件曲目会被路由到该插件去解析。
+ */
+export function registerSource(source: MediaSource): void {
+  if (BUILT_IN_IDS.has(source.id)) {
+    throw new Error(`来源标识「${source.id}」是内置来源，不能被动态来源占用。`);
+  }
+  REGISTRY.set(source.id, source);
+}
+
+/**
+ * 注销一个动态来源。此后该来源的曲目在 `resolveTrack` 中走 `source-not-registered`
+ * 分支——曲目仍留在曲库里，只是不可播放，这正是 plugin-source spec 要的行为。
+ */
+export function unregisterSource(id: SourceId): void {
+  if (BUILT_IN_IDS.has(id)) return;
+  REGISTRY.delete(id);
 }
