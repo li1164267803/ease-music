@@ -3,7 +3,7 @@
 
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
-import { ChevronRight, Download, ListOrdered, Repeat } from 'lucide-react-native';
+import { ChevronRight, Download, ListOrdered, Puzzle, Repeat } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
@@ -12,6 +12,7 @@ import { PLAY_MODE_LABELS, PLAY_MODES } from '@/domain/model/playback';
 import { useCollections, usePlaylists } from '@/library/store';
 import { setPlayMode } from '@/playback/player';
 import { usePlayback } from '@/playback/use-playback';
+import { Plugins } from '@/plugins';
 import { ImportSheet } from '@/ui/import-sheet';
 import { Screen } from '@/ui/screen';
 import { AppText } from '@/ui/text';
@@ -75,6 +76,14 @@ export default function ProfileScreen() {
             onPress={() => router.push('/queue')}
           />
           <Row Icon={Download} label="导入音乐" onPress={() => setImporting(true)} />
+          {/*
+            插件入口只在具备插件能力的平台上存在。iOS 侧 `supported` 恒为 false，
+            这一行整个不渲染——plugin-source spec 要求 iOS 上不存在任何插件相关入口，
+            而不是渲染一个「不可用」的入口。
+          */}
+          {Plugins.supported ? (
+            <Row Icon={Puzzle} label="插件音源" onPress={() => router.push('/plugins')} />
+          ) : null}
         </View>
 
         <View style={{ backgroundColor: Colors.surface, borderRadius: 18, padding: 18, gap: 10 }}>

@@ -39,25 +39,30 @@ for (const name of Object.keys(pkg.dependencies ?? {})) {
 }
 
 // ── 决策 7：核心能力不得依赖插件模块，iOS 裁剪插件后仍为功能完整的播放器 ──
-// C6 的插件系统将落在 src/plugins 下并以条件注册接入来源层。核心路径一旦引用它，
-// iOS 构建剔除该目录后就会编译失败或功能残缺——这正是本检查要拦住的。
+//
+// 裁剪的实现方式在 add-plugin-source-system/design.md 决策 6 中定稿：不是从构建里剔除
+// 目录，而是用平台后缀文件切断引用链。因此核心路径**可以**引用 `@/plugins` 门面与
+// `@/plugins/screens/*`——它们在 iOS 侧解析到的是空实现；不可以引用的是插件实现模块，
+// 那才会把宿主代码与 cheerio 等专属依赖拖进 iOS 产物。
+//
+// 本检查只看引用层面。裁剪是否真的生效必须看产物：`pnpm check:ios-strip`。
 const CORE = ['src/domain', 'src/sources', 'src/playback', 'src/library', 'src/ui', 'src/app'];
 let pluginRefs = '';
 try {
   pluginRefs = execSync(
-    `grep -rn "from '@/plugins" ${CORE.join(' ')} --include="*.ts" --include="*.tsx" || true`,
+    `grep -rn "from '@/plugins/" ${CORE.join(' ')} --include="*.ts" --include="*.tsx" | grep -v "@/plugins/screens/" || true`,
     { encoding: 'utf8' },
   ).trim();
 } catch {
   pluginRefs = '';
 }
 
-console.log('\n核心路径对插件模块的引用：');
+console.log('\n核心路径对插件实现模块的引用：');
 if (pluginRefs) {
   console.log(pluginRefs);
-  problems.push('核心能力引用了插件模块，iOS 裁剪后将无法交付完整功能（design.md 决策 7）');
+  problems.push('核心能力引用了插件实现模块，iOS 裁剪后将无法交付完整功能（design.md 决策 7）');
 } else {
-  console.log('  · 无');
+  console.log('  · 无（门面与屏幕模块的引用是允许的，见上方说明）');
 }
 
 console.log(

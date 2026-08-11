@@ -10,10 +10,17 @@ type SearchFieldProps = {
   value: string;
   onChangeText: (value: string) => void;
   placeholder: string;
+  /** 需要按回车才发起检索时传它。曲库检索是随输入即时过滤的，不需要。 */
+  onSubmitEditing?: () => void;
 };
 
 /** 设计稿 Search Field：surface 底、圆角 15、内距 14/15、图标与文字间距 10。 */
-export function SearchField({ value, onChangeText, placeholder }: SearchFieldProps) {
+export function SearchField({
+  value,
+  onChangeText,
+  placeholder,
+  onSubmitEditing,
+}: SearchFieldProps) {
   return (
     <View
       style={{
@@ -32,6 +39,11 @@ export function SearchField({ value, onChangeText, placeholder }: SearchFieldPro
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={Colors.textMuted}
+        // 搜索词不该被自动首字母大写，也不该被拼写纠正——曲名和艺人名经常不是规范英文单词
+        autoCapitalize="none"
+        autoCorrect={false}
+        onSubmitEditing={onSubmitEditing}
+        returnKeyType={onSubmitEditing ? 'search' : undefined}
         style={{ flex: 1, padding: 0, color: Colors.text, fontFamily: Font.regular, fontSize: 13 }}
       />
       {value.length > 0 ? (

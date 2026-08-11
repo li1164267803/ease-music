@@ -28,14 +28,14 @@ Free & open-source local music player for Android and iOS.
 
 ## 规划中的能力
 
-| | 能力 | 状态 |
-|---|---|---|
-| **C1** | 本地文件与远程 URL 播放 · 曲库与元数据 · 歌单 · 后台播放与锁屏控制 | 已实现，待真机验证 |
-| **C2** | 离线缓存（远程与网盘曲目缓存到本地，无网可听） | 待启动 |
-| **C3** | 歌词显示（本地 `.lrc` 与内嵌歌词） · 播放历史 | 待启动 |
-| **C4** | 曲库备份导出与导入 | 待启动 |
-| **C5** | 115 网盘接入 | 阻塞：开发者 API 权限审批中 |
-| **C6** | 插件音源系统（**仅 Android**，见下） | 待启动 |
+|        | 能力                                                               | 状态                        |
+| ------ | ------------------------------------------------------------------ | --------------------------- |
+| **C1** | 本地文件与远程 URL 播放 · 曲库与元数据 · 歌单 · 后台播放与锁屏控制 | 已实现，待真机验证          |
+| **C2** | 离线缓存（远程与网盘曲目缓存到本地，无网可听）                     | 待启动                      |
+| **C3** | 歌词显示（本地 `.lrc` 与内嵌歌词） · 播放历史                      | 待启动                      |
+| **C4** | 曲库备份导出与导入                                                 | 待启动                      |
+| **C5** | 115 网盘接入                                                       | 阻塞：开发者 API 权限审批中 |
+| **C6** | 插件音源系统（**仅 Android**，见下）                               | 已实现，iOS 侧待验证        |
 
 完整功能地图与路线图见 [`openspec/PRODUCT.md`](openspec/PRODUCT.md)。
 
@@ -45,22 +45,40 @@ Free & open-source local music player for Android and iOS.
 
 插件系统是 **Android 独占**能力。App Store 审核指南 2.5.2 与 2.3.1 使其无法在 iOS 上合规上架，因此它被设计为**编译期可裁剪模块**，iOS 构建中不包含相关代码。核心播放能力不依赖该模块——裁剪后的 iOS 版本仍是功能完整的播放器。
 
-插件完全由用户自行获取和安装，本项目**不内置、不默认指向任何插件源**。
+插件完全由用户自行获取和安装，本项目**不内置、不默认指向任何插件源**，也不提供任何插件市场、插件列表或推荐入口。从哪里获取插件、是否信任它，完全由使用者自行判断与承担。
+
+**插件没有沙箱。** 插件代码由应用加载后在同一个 JavaScript 环境中执行，能力等同于应用自身代码——它可以访问网络，也可以读写本应用的数据。本项目不对插件行为做任何限制或审核，只在首次安装前明确告知这一点。
+
+**插件可用的第三方库**（对插件作者是兼容性契约，只增不减；移除其中任何一项都会使既有插件失效）：
+
+| 模块名        | 说明                                                                                                                                                                             |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `axios`       | HTTP 请求                                                                                                                                                                        |
+| `cheerio`     | HTML 解析。注入的是 `cheerio/slim` 构建（主入口依赖 Node 的 `undici`/`node:stream`，在 React Native 上无法打包），因此 `fromURL` 不可用——请改用 `axios` 取页面后再交给 `cheerio` |
+| `crypto-js`   | 加解密与摘要                                                                                                                                                                     |
+| `dayjs`       | 日期处理                                                                                                                                                                         |
+| `big-integer` | 大整数运算                                                                                                                                                                       |
+| `qs`          | 查询串序列化                                                                                                                                                                     |
+| `he`          | HTML 实体编解码                                                                                                                                                                  |
+
+只认这几个确切的模块名，不支持子路径引入（如 `crypto-js/md5`）。引入名单之外的模块会使该次调用失败，并向用户指明是哪个插件、缺哪个模块。
+
+协议形状参考 [MusicFree](https://github.com/maotoumao/MusicFree) 的公开插件规范，以便既有插件可以直接复用。**仅参考协议规范，未复制其源代码**（MusicFree 为 AGPL-3.0）。
 
 ## 技术栈
 
 版本均已锁定，升级随 Expo SDK 整体进行。
 
-| | 版本 | 说明 |
-|---|---|---|
-| Expo SDK | `~57.0.11` | Development Build 工作流，EAS Build 构建 |
-| React Native | `0.86.2` | 新架构（SDK 55 起不可关闭） |
-| TypeScript | `~6.0.3` | `strict` + `noUncheckedIndexedAccess` |
-| `expo-audio` | `~57.0.3` | 播放引擎、后台播放、锁屏与通知栏媒体会话 |
-| `expo-sqlite` | `~57.0.1` | 曲库与歌单存储，`kv-store` 兼作配置持久化 |
-| `expo-file-system` | `~57.0.2` | 文件选择器、本地文件读取、封面落盘 |
-| `music-metadata` | `^11.14.0` | ID3v2 / Vorbis Comment / MP4 atom 元数据解析 |
-| `expo-router` | `~57.0.11` | 路由 |
+|                    | 版本       | 说明                                         |
+| ------------------ | ---------- | -------------------------------------------- |
+| Expo SDK           | `~57.0.11` | Development Build 工作流，EAS Build 构建     |
+| React Native       | `0.86.2`   | 新架构（SDK 55 起不可关闭）                  |
+| TypeScript         | `~6.0.3`   | `strict` + `noUncheckedIndexedAccess`        |
+| `expo-audio`       | `~57.0.3`  | 播放引擎、后台播放、锁屏与通知栏媒体会话     |
+| `expo-sqlite`      | `~57.0.1`  | 曲库与歌单存储，`kv-store` 兼作配置持久化    |
+| `expo-file-system` | `~57.0.2`  | 文件选择器、本地文件读取、封面落盘           |
+| `music-metadata`   | `^11.14.0` | ID3v2 / Vorbis Comment / MP4 atom 元数据解析 |
+| `expo-router`      | `~57.0.11` | 路由                                         |
 
 包管理器为 **pnpm**（`.npmrc` 设置了 `node-linker=hoisted`，RN 的原生模块自动链接依赖扁平的 `node_modules` 布局）。
 
@@ -94,12 +112,15 @@ npx eas build --profile development --platform android
 pnpm typecheck           # tsc --noEmit
 pnpm lint                # eslint（含 GPL 头部与分层约束规则）
 pnpm format              # prettier --write
-pnpm check:constraints   # 依赖许可证 + 核心能力不依赖插件模块
+pnpm check:constraints   # 依赖许可证 + 核心能力不依赖插件实现
+pnpm check:ios-strip     # 导出 iOS 产物，断言其中不含插件实现与插件专属依赖
 pnpm test:cla            # CLA 工作流的桩测试
 pnpm doctor              # expo-doctor
 ```
 
-`pnpm check:constraints` 检查的是两条**长期**约束：依赖不得引入 GPL/LGPL/AGPL 或专有授权的库；核心能力不得依赖插件模块（否则 iOS 裁剪后无法交付完整功能）。破坏其中任何一条都会让 iOS 失去合规上架的前提，因此它是每次改依赖后都应该跑的检查，而不是一次性的。
+`pnpm check:constraints` 检查的是两条**长期**约束：依赖不得引入 GPL/LGPL/AGPL 或专有授权的库；核心能力不得依赖插件实现模块（否则 iOS 裁剪后无法交付完整功能）。破坏其中任何一条都会让 iOS 失去合规上架的前提，因此它是每次改依赖后都应该跑的检查，而不是一次性的。
+
+`pnpm check:ios-strip` 是前一条在**产物层面**的验证：它真的导出一份 iOS 产物，读 source map 里的模块清单，断言插件宿主与 `cheerio` 等插件专属依赖确实不在其中。裁剪失效在运行时看不出任何差别——功能照常、界面照常，只有包体默默变大，而「iOS 包中不含可下载执行的代码」这一审核陈述不再成立。因此它必须靠检查产物来发现。耗时约一两分钟，改动插件模块或其引用关系后跑一次。
 
 ### 代码结构
 
@@ -108,9 +129,12 @@ src/domain     领域层：曲目与歌单模型、SQLite 迁移与仓储、配�
 src/sources    来源层：统一解析契约、来源注册表、唯一解析入口、本地文件 / 远程 URL
 src/playback   播放层：播放控制、队列、播放模式、媒体会话、播放状态
 src/library    曲库能力：元数据解析、封面提取与缓存、导入编排
+src/plugins    插件音源（仅 Android）：宿主、协议适配、生命周期、界面
 src/ui         界面组件与设计令牌
 src/app        expo-router 路由（保持极薄）
 ```
+
+`src/plugins` 与其余部分之间只有一条通路：`src/plugins/index.ts` 门面（以及 `screens/` 下的屏幕模块）。两者都有 `.android` 对应文件，iOS 解析到的是空实现——插件实现与其依赖因此根本不出现在 iOS 的模块图里。ESLint 禁止其余代码直接引用插件实现模块。
 
 分层约定与依赖方向见 [`docs/architecture.md`](docs/architecture.md)。**上层可以依赖下层，下层不得依赖上层**；播放层不得感知具体来源，这条由 ESLint 强制执行。
 

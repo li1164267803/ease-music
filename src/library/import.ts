@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 li1164267803 · 自在音乐 EaseMusic
 
+import { toNewTrack, type CandidateTrack } from '@/domain/model/candidate-track';
 import { SOURCE_LOCAL_FILE, SOURCE_REMOTE_URL, type Track } from '@/domain/model/track';
 import { addTrack, findBySourceKey } from '@/domain/repository/track-repository';
 import { cacheArtwork } from '@/library/artwork';
@@ -118,4 +119,18 @@ export async function importRemoteUrl(input: string): Promise<RemoteImportResult
   });
 
   return { ok: true, track, duplicate: !created };
+}
+
+/**
+ * 候选曲目入库。
+ *
+ * 不解析音频文件的内嵌标签——曲目信息由来源直接提供（music-library spec「曲目元数据」
+ * 的第二条途径）。除此之外与其他入库路径走的是同一个 `addTrack`：同样的去重、同样的
+ * 记录形态，因此入库后它与本地文件曲目在曲库、歌单、检索、播放里完全同权。
+ */
+export async function addCandidateTrack(
+  candidate: CandidateTrack,
+): Promise<{ track: Track; duplicate: boolean }> {
+  const { track, created } = await addTrack(toNewTrack(candidate));
+  return { track, duplicate: !created };
 }

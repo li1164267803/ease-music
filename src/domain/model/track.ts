@@ -37,7 +37,11 @@ export type Track = {
   album: string | null;
   durationMs: number | null;
   trackNumber: number | null;
-  /** 封面缓存文件的 URI。null 表示无内嵌封面，由界面显示统一占位图。 */
+  /**
+   * 封面地址。两种形态，界面对两者一视同仁（music-library spec「封面提取与展示」）：
+   * 内嵌封面提取后落盘的本地文件 URI，或来源直接提供的远程图片地址。
+   * null 表示没有封面，由界面显示统一占位图。
+   */
   artworkUri: string | null;
 
   addedAt: number;

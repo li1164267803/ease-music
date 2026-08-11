@@ -16,6 +16,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { initPlayback } from '@/playback/player';
+import { Plugins } from '@/plugins';
 import { Colors } from '@/ui/theme';
 
 void SplashScreen.preventAutoHideAsync();
@@ -32,6 +33,13 @@ export default function RootLayout() {
     // 播放服务在应用启动时初始化：音频会话配置与锁屏注册要早于任何播放动作，
     // 等到用户点播放再配置会错过第一首曲目的媒体会话。
     void initPlayback();
+  }, []);
+
+  useEffect(() => {
+    // 已安装的插件在启动时统一加载并注册为来源，否则用户点开一首插件曲目时，
+    // 它归属的来源还不在注册表里，会被当成「来源不可用」。
+    // iOS 上这是一个空实现，不引入任何插件代码（design.md 决策 6）。
+    void Plugins.init();
   }, []);
 
   useEffect(() => {
