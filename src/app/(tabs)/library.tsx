@@ -6,11 +6,17 @@ import { ArrowUpDown, Plus } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
+import { listDownloadedTracks } from '@/cache/repository';
 import { createPlaylist } from '@/domain/repository/playlist-repository';
-import { notifyLibraryChanged, useCollections, usePlaylists } from '@/library/store';
+import {
+  notifyLibraryChanged,
+  useCollections,
+  useLibraryQuery,
+  usePlaylists,
+} from '@/library/store';
 import { playQueue } from '@/playback/player';
 import { Chip } from '@/ui/chip';
-import { formatRelativeDay } from '@/ui/format';
+import { formatBytes, formatRelativeDay } from '@/ui/format';
 import { ImportSheet } from '@/ui/import-sheet';
 import { MediaCard } from '@/ui/media-card';
 import { NameSheet } from '@/ui/name-sheet';
@@ -59,6 +65,8 @@ export default function LibraryScreen() {
   // 只按当前分类取一次聚合：歌单与「已下载」分类下这份结果用不上，但多查一次
   // 专辑还是艺人的代价，远小于为每个分类各挂一个 hook。
   const collections = useCollections(category === 'artist' ? 'artist' : 'album');
+  // 下载完成与删除缓存都会发一次曲库变更广播，因此这份查询跟着一起重跑。
+  const downloaded = useLibraryQuery(() => listDownloadedTracks(), []) ?? [];
 
   const entries = (
     category === 'playlist'
@@ -70,7 +78,19 @@ export default function LibraryScreen() {
           onPress: () => router.push(`/playlist/${playlist.id}`),
         }))
       : category === 'downloaded'
-        ? []
+        ? downloaded.map<Entry>((item, index) => ({
+            key: item.track.id,
+            coverUri: item.track.artworkUri,
+            title: item.track.title,
+            meta: `${item.track.artist ?? '未知艺术家'} · ${formatBytes(item.bytes)}`,
+            // 点一首就把整份已下载内容作为队列播起来——离线场景下这一串正好是
+            // 此刻唯一确定能连着播完的曲目。
+            onPress: () =>
+              void playQueue(
+                downloaded.map((entry) => entry.track),
+                index,
+              ),
+          }))
         : collections.map<Entry>((collection) => ({
             key: collection.name,
             coverUri: collection.coverUri,
@@ -211,8 +231,7 @@ const EMPTY_HINTS: Record<Category, string> = {
   playlist: '还没有歌单，用右上角的 + 新建一个',
   album: '曲库里还没有带专辑信息的曲目',
   artist: '曲库里还没有带艺人信息的曲目',
-  // 离线缓存是 C2 的能力，分类先摆在这里，点进来说明清楚而不是装作有内容
-  downloaded: '离线缓存将在后续版本提供',
+  downloaded: '还没有下载任何曲目。在播放页或歌单里点下载图标，即可离线收听',
 };
 
 function EmptyCategory({ category }: { category: Category }) {

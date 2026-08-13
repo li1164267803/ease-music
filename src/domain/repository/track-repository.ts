@@ -6,7 +6,8 @@ import { randomUUID } from 'expo-crypto';
 import { getDatabase } from '@/domain/db';
 import type { NewTrack, SourceId, Track, TrackSortKey } from '@/domain/model/track';
 
-type TrackRow = {
+/** 导出给需要 join `tracks` 的其他仓储（如离线缓存），避免各处重复一份行映射。 */
+export type TrackRow = {
   id: string;
   source_id: string;
   source_key: string;
@@ -24,7 +25,7 @@ type TrackRow = {
 const COLUMNS = `id, source_id, source_key, source_ref, title, artist, album,
                  duration_ms, track_number, artwork_uri, added_at, unavailable`;
 
-function toTrack(row: TrackRow): Track {
+export function toTrack(row: TrackRow): Track {
   return {
     id: row.id,
     sourceId: row.source_id,

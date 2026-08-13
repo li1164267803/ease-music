@@ -5,6 +5,7 @@ import { EllipsisVertical, TriangleAlert } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { DownloadButton } from '@/cache/ui/download-button';
 import type { Track } from '@/domain/model/track';
 import { Artwork } from '@/ui/artwork';
 import { trackSubtitle } from '@/ui/format';
@@ -57,12 +58,24 @@ export function TrackRow({
           </AppText>
         </View>
       </View>
-      {trailing ??
-        (onMore ? (
-          <Pressable onPress={onMore} hitSlop={10}>
-            <EllipsisVertical size={18} color={Colors.textMuted} />
-          </Pressable>
-        ) : null)}
+      {/*
+        行尾默认是「下载 + 更多」。下载入口必须落在曲目行上——插件搜索的结果加入曲库后，
+        用户下一眼看到的就是这样一行，让他为了下载先去开播放页是没道理的。
+        本地文件曲目的按钮整个不渲染，纯本地曲库看不出任何变化。
+
+        传了 trailing 的场景（播放队列的移除、缓存管理的体积与删除）不叠加下载按钮：
+        那两处的行尾已经有各自的动作，而缓存管理页列的本来就全是已下载的曲目。
+      */}
+      {trailing ?? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <DownloadButton track={track} />
+          {onMore ? (
+            <Pressable onPress={onMore} hitSlop={10}>
+              <EllipsisVertical size={18} color={Colors.textMuted} />
+            </Pressable>
+          ) : null}
+        </View>
+      )}
     </Pressable>
   );
 }

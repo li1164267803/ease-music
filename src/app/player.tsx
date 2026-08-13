@@ -21,6 +21,8 @@ import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useTrackCacheState } from '@/cache/store';
+import { DownloadButton } from '@/cache/ui/download-button';
 import type { PlayMode } from '@/domain/model/playback';
 import {
   clearError,
@@ -56,6 +58,10 @@ export default function PlayerScreen() {
   const position = scrubbing ?? playback.positionMs;
   const duration = playback.durationMs;
   const shuffling = playback.playMode === 'shuffle';
+
+  // 下载失败时按钮只变成一个警告图标，原因必须另有落点——offline-cache spec
+  // 要求说明失败原因而不是静默失败，一个图标说明不了是断网还是地址失效。
+  const cacheState = useTrackCacheState(track?.id ?? '');
 
   return (
     <View
@@ -230,7 +236,7 @@ export default function PlayerScreen() {
         >
           {/*
             音质标记按设计稿呈现。来源层目前不返回采样率与位深，这枚标签还没有数据
-            支撑——真实音质要等 C2 缓存元数据落地后才能填进来。
+            支撑——离线缓存原样落盘、不解析音频参数，同样填不了它。
           */}
           <View
             style={{
@@ -251,6 +257,8 @@ export default function PlayerScreen() {
             </AppText>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 20 }}>
+            {/* 本地文件曲目不渲染下载入口，这一排会自然少一枚图标 */}
+            {track ? <DownloadButton track={track} size={20} /> : null}
             <MicVocal size={20} color={Colors.textMuted} />
             <Pressable onPress={() => router.push('/queue')} hitSlop={10}>
               <ListMusic size={20} color={Colors.textMuted} />
@@ -258,6 +266,12 @@ export default function PlayerScreen() {
             <Share2 size={20} color={Colors.textMuted} />
           </View>
         </View>
+
+        {cacheState.status === 'failed' ? (
+          <AppText size={12} color={Colors.danger}>
+            {cacheState.reason}再次点击下载图标可重试。
+          </AppText>
+        ) : null}
       </ScrollView>
     </View>
   );

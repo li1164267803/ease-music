@@ -4,6 +4,7 @@
 import { AudioLines, EllipsisVertical } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 
+import { DownloadButton } from '@/cache/ui/download-button';
 import type { Track } from '@/domain/model/track';
 import { formatDuration, trackSubtitle } from '@/ui/format';
 import { AppText } from '@/ui/text';
@@ -76,6 +77,9 @@ export function IndexedTrackRow({
           {formatDuration(track.durationMs)}
         </AppText>
       ) : null}
+
+      {/* 单曲下载入口。本地文件曲目不渲染，纯本地曲库的歌单看不出任何变化。 */}
+      <DownloadButton track={track} />
 
       <Pressable onPress={onMore} hitSlop={10}>
         <EllipsisVertical size={16} color={Colors.textMuted} />

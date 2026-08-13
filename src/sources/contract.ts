@@ -25,8 +25,19 @@ export type MediaSource = {
   /**
    * 把曲目解析为可播放地址。**每次播放前实时调用**，不缓存结果——
    * 网盘与插件返回的地址有时效性。
+   *
+   * 「不缓存结果」说的是**地址**。离线缓存（C2）缓存的是**音频字节**，二者不冲突：
+   * 地址仍然每次实时解析，只是命中本地缓存时根本不走到这里。
    */
   resolve(track: Track): Promise<ResolvedMedia>;
+  /**
+   * 该来源的曲目能否被下载到本地（add-offline-cache/design.md 决策 9）。
+   *
+   * **缺省视为 `true`**——这是对契约的增量扩展，既有来源与将来的新来源不写这个字段
+   * 即可，media-source spec「新增来源仅需实现解析契约与注册标识」不受影响。
+   * 音频本就在设备上、不依赖网络的来源声明 `false`：再复制一份纯属浪费。
+   */
+  readonly cacheable?: boolean;
 };
 
 export type MediaResolutionErrorCode =

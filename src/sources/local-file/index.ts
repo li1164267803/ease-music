@@ -37,6 +37,10 @@ export const localFileSource: MediaSource = {
   id: SOURCE_LOCAL_FILE,
   displayName: '本地文件',
 
+  // 音频本就在设备上，离线缓存对它没有任何意义——再复制一份只是白占存储。
+  // offline-cache spec：这类曲目不提供下载入口，也不计入已下载内容。
+  cacheable: false,
+
   async resolve(track: Track): Promise<ResolvedMedia> {
     const ref = readRef(track);
     const file = new File(ref.uri);
