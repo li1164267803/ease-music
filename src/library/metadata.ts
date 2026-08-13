@@ -4,6 +4,8 @@
 import { File } from 'expo-file-system';
 import { parseBuffer, type IPicture } from 'music-metadata';
 
+import { sniffAudioExtension } from '@/domain/audio-format';
+
 export type ParsedMetadata = {
   title: string | null;
   artist: string | null;
@@ -74,52 +76,19 @@ function durationSurvivesTruncation(parsed: ParseResult, head: HeadRead): boolea
   return parsed.metadata.durationMs > readableMs * DURATION_TRUST_MARGIN;
 }
 
-/**
- * 按魔数判断容器格式，返回 `music-metadata` 认得的扩展名。
- *
- * **这不是可有可无的优化，是绕过一个真实缺陷。** `music-metadata` 自带的内容嗅探
- * 走 `findLoaderForContentType`，它依赖 `content-type` 与 `media-typer` 解析 MIME 串；
- * 该路径在 Node 下正常，但在 Hermes 上失败，报 `Guessed MIME-type not supported:
- * audio/mpeg`——所有本地文件的元数据因此全部解析不出来。真机实测二分确认：改走
- * `findLoaderForExtension`（纯字符串比较，不碰那两个库）即可正常解析。
- *
- * 顺带也比依赖文件名更可靠：Android SAF 给回的 content:// URI 根本没有扩展名。
- */
-function sniffExtension(bytes: Uint8Array): string | null {
-  const ascii = (offset: number, length: number) =>
-    String.fromCharCode(...bytes.subarray(offset, offset + length));
-
-  if (bytes.length < 12) return null;
-
-  if (ascii(0, 3) === 'ID3') return '.mp3';
-  // MPEG 帧同步：11 个连续的 1
-  if (bytes[0] === 0xff && ((bytes[1] ?? 0) & 0xe0) === 0xe0) return '.mp3';
-  if (ascii(0, 4) === 'fLaC') return '.flac';
-  if (ascii(4, 4) === 'ftyp') return '.m4a';
-  if (ascii(0, 4) === 'OggS') return '.ogg';
-  if (ascii(0, 4) === 'RIFF' && ascii(8, 4) === 'WAVE') return '.wav';
-  if (ascii(0, 4) === 'FORM' && ascii(8, 4).startsWith('AIF')) return '.aiff';
-  if (ascii(0, 4) === 'MAC ') return '.ape';
-  // ASF/WMA 的 GUID 头
-  if (bytes[0] === 0x30 && bytes[1] === 0x26 && bytes[2] === 0xb2 && bytes[3] === 0x75) {
-    return '.wma';
-  }
-  return null;
-}
-
 /** 解析结果附带码率，仅用于判断截断读取下的时长是否可信，不对外暴露。 */
 type ParseResult = { metadata: ParsedMetadata; bitrate: number | null };
 
 async function tryParse(bytes: Uint8Array): Promise<ParseResult | null> {
   try {
-    const extension = sniffExtension(bytes);
+    const extension = sniffAudioExtension(bytes);
     if (!extension) {
       // 认不出的格式不再交给库去猜——那条路在 Hermes 上必然失败，
       // 白等一次异常不如直接降级到文件名。
       return null;
     }
 
-    const { common, format } = await parseBuffer(bytes, { path: `audio${extension}` });
+    const { common, format } = await parseBuffer(bytes, { path: `audio.${extension}` });
     return {
       metadata: {
         title: nonEmpty(common.title),

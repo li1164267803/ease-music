@@ -23,6 +23,21 @@ export function formatTotalDuration(ms: number | null): string | null {
   return hours > 0 ? `${hours} 小时 ${minutes % 60} 分` : `${minutes} 分`;
 }
 
+const KB = 1024;
+const MB = 1024 * KB;
+const GB = 1024 * MB;
+
+/**
+ * 存储占用。MB 保留一位、GB 保留两位——再多的位数对「这些歌占了多少地方」
+ * 这个问题没有意义，只会让数字更难扫。
+ */
+export function formatBytes(bytes: number): string {
+  if (bytes < KB) return `${Math.max(bytes, 0)} B`;
+  if (bytes < MB) return `${Math.round(bytes / KB)} KB`;
+  if (bytes < GB) return `${(bytes / MB).toFixed(1)} MB`;
+  return `${(bytes / GB).toFixed(2)} GB`;
+}
+
 const DAY = 86400000;
 
 /** 相对日期：设计稿卡片副标题的「今天 / 4 天前 / 上周 / 3 周前」。 */

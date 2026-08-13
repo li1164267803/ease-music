@@ -15,6 +15,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import ReorderableList, { reorderItems, useReorderableDrag } from 'react-native-reorderable-list';
 
+import { enqueueDownloads, useDownloadQueue, type DownloadQueueSnapshot } from '@/cache/queue';
 import type { Track } from '@/domain/model/track';
 import {
   deletePlaylist,
@@ -54,6 +55,29 @@ function DraggableTrackRow(props: {
   return <IndexedTrackRow {...props} onLongPress={drag} />;
 }
 
+/**
+ * 批量下载的整体进度与结果。
+ *
+ * 队列排空后仍然报一次结果——offline-cache spec 要求「最终告知用户哪些曲目未成功」，
+ * 而失败的那几首在列表里只是各自显示一个警告图标，用户不会挨行去找。
+ */
+function describeQueue({ pending, completed, failed }: DownloadQueueSnapshot): string | null {
+  if (pending > 0) return `正在下载，还剩 ${pending} 首`;
+  if (completed === 0 && failed.length === 0) return null;
+
+  const done = completed > 0 ? `已下载 ${completed} 首` : '没有曲目下载成功';
+  if (failed.length === 0) return done;
+
+  // 只失败一首时把原因说全；失败多首时逐条列出来会挤满屏幕，改为列标题，
+  // 各自的具体原因在曲目行的失败图标上（长按可读无障碍标签）与重试后再次呈现。
+  const first = failed[0];
+  const detail =
+    failed.length === 1 && first
+      ? `「${first.title}」失败：${first.reason}`
+      : `${failed.length} 首失败：${failed.map((item) => item.title).join('、')}`;
+  return `${done}，${detail}`;
+}
+
 export default function PlaylistDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -91,6 +115,7 @@ export default function PlaylistDetailScreen() {
   };
 
   const total = formatTotalDuration(playlist?.durationMs ?? null);
+  const downloadNotice = describeQueue(useDownloadQueue());
 
   return (
     <Screen gap={22}>
@@ -156,14 +181,25 @@ export default function PlaylistDetailScreen() {
           </AppText>
         </Pressable>
         <CircleButton Icon={Shuffle} size={46} iconSize={18} onPress={() => void start(true)} />
-        {/* 收藏与下载分别依赖后续的曲库字段与 C2 离线缓存，先只呈现设计稿的位置 */}
+        {/* 收藏依赖后续的曲库字段，先只呈现设计稿的位置 */}
         <CircleButton Icon={Heart} size={46} iconSize={18} />
-        <CircleButton Icon={ArrowDownToLine} size={46} iconSize={18} />
+        <CircleButton
+          Icon={ArrowDownToLine}
+          size={46}
+          iconSize={18}
+          onPress={() => {
+            const added = enqueueDownloads(tracks);
+            // 一首都没入队时必须说清楚，否则点了没反应像是坏了。
+            if (added === 0) {
+              setNotice('没有需要下载的曲目——它们要么已下载，要么音频本就在设备上。');
+            }
+          }}
+        />
       </View>
 
-      {notice ? (
+      {(downloadNotice ?? notice) ? (
         <AppText size={12} color={Colors.textMuted}>
-          {notice}
+          {downloadNotice ?? notice}
         </AppText>
       ) : null}
 

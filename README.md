@@ -9,7 +9,7 @@ Free & open-source local music player for Android and iOS.
 
 </div>
 
-> ⚠️ **项目状态：开发中，尚无可用版本。** C1（工程基座与核心播放能力）已实现完毕，正在真机验证阶段——尚未在 iOS 与 Android 真机上跑通后台播放、锁屏控制与来电打断恢复。下方 C2 及之后的功能列表描述的是规划中的能力，不代表已经实现。
+> ⚠️ **项目状态：开发中，尚无可用版本。** C1（工程基座与核心播放能力）、C2（离线缓存）、C6（插件音源）已实现完毕，正在真机验证阶段——尚未在 iOS 与 Android 真机上跑通后台播放、锁屏控制、来电打断恢复与离线下载。下方标注为「待启动」的能力尚未实现。
 
 ## 这是什么
 
@@ -31,7 +31,7 @@ Free & open-source local music player for Android and iOS.
 |        | 能力                                                               | 状态                        |
 | ------ | ------------------------------------------------------------------ | --------------------------- |
 | **C1** | 本地文件与远程 URL 播放 · 曲库与元数据 · 歌单 · 后台播放与锁屏控制 | 已实现，待真机验证          |
-| **C2** | 离线缓存（远程与网盘曲目缓存到本地，无网可听）                     | 待启动                      |
+| **C2** | 离线缓存（手动下载曲目到本地，无网可听）                           | 已实现，待真机验证          |
 | **C3** | 歌词显示（本地 `.lrc` 与内嵌歌词） · 播放历史                      | 待启动                      |
 | **C4** | 曲库备份导出与导入                                                 | 待启动                      |
 | **C5** | 115 网盘接入                                                       | 阻塞：开发者 API 权限审批中 |
@@ -69,16 +69,16 @@ Free & open-source local music player for Android and iOS.
 
 版本均已锁定，升级随 Expo SDK 整体进行。
 
-|                    | 版本       | 说明                                         |
-| ------------------ | ---------- | -------------------------------------------- |
-| Expo SDK           | `~57.0.11` | Development Build 工作流，EAS Build 构建     |
-| React Native       | `0.86.2`   | 新架构（SDK 55 起不可关闭）                  |
-| TypeScript         | `~6.0.3`   | `strict` + `noUncheckedIndexedAccess`        |
-| `expo-audio`       | `~57.0.3`  | 播放引擎、后台播放、锁屏与通知栏媒体会话     |
-| `expo-sqlite`      | `~57.0.1`  | 曲库与歌单存储，`kv-store` 兼作配置持久化    |
-| `expo-file-system` | `~57.0.2`  | 文件选择器、本地文件读取、封面落盘           |
-| `music-metadata`   | `^11.14.0` | ID3v2 / Vorbis Comment / MP4 atom 元数据解析 |
-| `expo-router`      | `~57.0.11` | 路由                                         |
+|                    | 版本       | 说明                                             |
+| ------------------ | ---------- | ------------------------------------------------ |
+| Expo SDK           | `~57.0.11` | Development Build 工作流，EAS Build 构建         |
+| React Native       | `0.86.2`   | 新架构（SDK 55 起不可关闭）                      |
+| TypeScript         | `~6.0.3`   | `strict` + `noUncheckedIndexedAccess`            |
+| `expo-audio`       | `~57.0.3`  | 播放引擎、后台播放、锁屏与通知栏媒体会话         |
+| `expo-sqlite`      | `~57.0.1`  | 曲库与歌单存储，`kv-store` 兼作配置持久化        |
+| `expo-file-system` | `~57.0.2`  | 文件选择器、本地文件读取、封面落盘、离线缓存下载 |
+| `music-metadata`   | `^11.14.0` | ID3v2 / Vorbis Comment / MP4 atom 元数据解析     |
+| `expo-router`      | `~57.0.11` | 路由                                             |
 
 包管理器为 **pnpm**（`.npmrc` 设置了 `node-linker=hoisted`，RN 的原生模块自动链接依赖扁平的 `node_modules` 布局）。
 
@@ -129,6 +129,7 @@ src/domain     领域层：曲目与歌单模型、SQLite 迁移与仓储、配�
 src/sources    来源层：统一解析契约、来源注册表、唯一解析入口、本地文件 / 远程 URL
 src/playback   播放层：播放控制、队列、播放模式、媒体会话、播放状态
 src/library    曲库能力：元数据解析、封面提取与缓存、导入编排
+src/cache      离线缓存：下载队列、缓存记录与文件、解析入口处的缓存命中
 src/plugins    插件音源（仅 Android）：宿主、协议适配、生命周期、界面
 src/ui         界面组件与设计令牌
 src/app        expo-router 路由（保持极薄）

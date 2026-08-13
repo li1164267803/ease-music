@@ -59,6 +59,37 @@ const MIGRATIONS: Migration[] = [
       CREATE INDEX idx_playlist_tracks_track ON playlist_tracks (track_id);
     `,
   },
+  {
+    version: 2,
+    up: `
+      -- add-offline-cache/design.md 决策 1：缓存是曲目的**外部**事实，独立成表而不是给
+      -- tracks 加列。曲库列表的每次查询都要读全部曲目行，不该背上与曲目本身无关的字段；
+      -- 而 ON DELETE CASCADE 让「曲目没了、缓存记录还在」在数据库层面无法出现。
+      --
+      -- 只记录**已完成**的下载（决策 7）：排队中与下载中的状态随进程生灭，落库反而要在
+      -- 每次启动时把它们改回未下载。
+      CREATE TABLE track_cache (
+        track_id     TEXT    PRIMARY KEY NOT NULL REFERENCES tracks (id) ON DELETE CASCADE,
+        file_uri     TEXT    NOT NULL,
+        bytes        INTEGER NOT NULL,
+        completed_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX idx_track_cache_completed ON track_cache (completed_at);
+    `,
+  },
+  {
+    version: 3,
+    up: `
+      -- 下载到的音频**实际有多长**。它与 tracks.duration_ms 是两件事：后者是来源自述的
+      -- 时长，前者是文件里真实存在的音频。两者对不上时用户才看得出来自己下到的是什么——
+      -- 实测网易插件对版权受限曲目返回 30 秒试听片段，下载「成功」且响应完整，
+      -- 缓存层无从判断，只能把事实摆给用户。
+      --
+      -- 允许为空：本列之前完成的下载没有这项数据，界面据此只显示体积。
+      ALTER TABLE track_cache ADD COLUMN duration_ms INTEGER;
+    `,
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0;

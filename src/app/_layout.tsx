@@ -15,6 +15,7 @@ import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { initTrackCache } from '@/cache/store';
 import { initPlayback } from '@/playback/player';
 import { Plugins } from '@/plugins';
 import { Colors } from '@/ui/theme';
@@ -40,6 +41,12 @@ export default function RootLayout() {
     // 它归属的来源还不在注册表里，会被当成「来源不可用」。
     // iOS 上这是一个空实现，不引入任何插件代码（design.md 决策 6）。
     void Plugins.init();
+  }, []);
+
+  useEffect(() => {
+    // 缓存层的启动清理：清掉上次没跑完的下载残留、删除没有记录的孤儿文件，
+    // 并把已完成的缓存记录读进内存供界面呈现（add-offline-cache/design.md 决策 8）。
+    void initTrackCache();
   }, []);
 
   useEffect(() => {

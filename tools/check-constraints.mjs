@@ -46,7 +46,15 @@ for (const name of Object.keys(pkg.dependencies ?? {})) {
 // 那才会把宿主代码与 cheerio 等专属依赖拖进 iOS 产物。
 //
 // 本检查只看引用层面。裁剪是否真的生效必须看产物：`pnpm check:ios-strip`。
-const CORE = ['src/domain', 'src/sources', 'src/playback', 'src/library', 'src/ui', 'src/app'];
+const CORE = [
+  'src/domain',
+  'src/sources',
+  'src/playback',
+  'src/library',
+  'src/cache',
+  'src/ui',
+  'src/app',
+];
 let pluginRefs = '';
 try {
   pluginRefs = execSync(
