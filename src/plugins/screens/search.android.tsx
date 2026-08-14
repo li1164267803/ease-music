@@ -16,7 +16,8 @@ import { Artwork } from '@/ui/artwork';
 import { Screen } from '@/ui/screen';
 import { SearchField } from '@/ui/search-field';
 import { AppText } from '@/ui/text';
-import { Colors, IconSize, MINI_DOCK_HEIGHT } from '@/ui/theme';
+import { Colors, IconSize } from '@/ui/theme';
+import { useMiniDockInset } from '@/ui/mini-player';
 
 /**
  * 插件搜索。
@@ -25,6 +26,7 @@ import { Colors, IconSize, MINI_DOCK_HEIGHT } from '@/ui/theme';
  * 曲库检索都不会发生任何变化。加入之后它与本地文件曲目完全同权。
  */
 export default function PluginSearchScreen() {
+  const dockInset = useMiniDockInset();
   const router = useRouter();
 
   const [keyword, setKeyword] = useState('');
@@ -91,7 +93,7 @@ export default function PluginSearchScreen() {
         <FlashList
           data={candidates}
           keyExtractor={candidateKey}
-          contentContainerStyle={{ paddingBottom: MINI_DOCK_HEIGHT }}
+          contentContainerStyle={{ paddingBottom: dockInset }}
           ItemSeparatorComponent={() => <View style={{ height: 15 }} />}
           showsVerticalScrollIndicator={false}
           onEndReachedThreshold={0.5}

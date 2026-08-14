@@ -12,6 +12,8 @@ import type { PlaybackState, PlayMode } from '@/domain/model/playback';
 import type { Track } from '@/domain/model/track';
 import { setTrackUnavailable } from '@/domain/repository/track-repository';
 import { loadPlayMode, savePlayMode } from '@/domain/settings';
+import { recordPlay } from '@/history/repository';
+import { notifyHistoryChanged } from '@/history/store';
 import { buildOrder, step, withRemoved, type PlayOrder } from '@/playback/queue';
 import { MediaResolutionError } from '@/sources/contract';
 import { resolveTrack } from '@/sources/resolve';
@@ -316,11 +318,39 @@ async function load(index: number, { autoPlay }: { autoPlay: boolean }): Promise
     updateLockScreen(track);
     consecutiveFailures = 0;
 
-    if (autoPlay) player.play();
+    if (autoPlay) {
+      player.play();
+      rememberPlayed(track);
+    }
   } catch (error) {
     if (token !== loadToken) return;
     await handleLoadFailure(track, error, autoPlay);
   }
+}
+
+/**
+ * 记一次播放（add-playback-history/design.md 决策 2、4）。
+ *
+ * 三条约束都体现在这几行里：
+ *
+ * 1. **不 await**。历史写入没有理由延后播放开始的时刻。
+ * 2. **异常就地吞掉**，绝不能冒泡回 `load()` 的 catch——那里是 `handleLoadFailure`，
+ *    它会跳到下一首、累加连续失败计数、甚至把曲目标记为失效。一次写库失败会被
+ *    表达成「这首歌播不了」，拿主要能力给次要能力陪葬。
+ * 3. **但不静默**。写进 warn，否则线上问题无从查起（与 `src/library/metadata.ts`
+ *    的处理一致）。
+ *
+ * 调用点在 `load()` 内、`player.replace` 成功之后且仅当 `autoPlay`：解析成功不等于
+ * 播得响，而 `autoPlay: false` 那条路径（队列为空时的预装载）不是一次播放。
+ * 「装载中途用户又切歌」由 `load()` 既有的 `token !== loadToken` 守卫挡掉——那时
+ * 函数已经提前返回，根本走不到这里，因此这里不需要自己再判一次。
+ */
+function rememberPlayed(track: Track): void {
+  void recordPlay(track.id)
+    .then(notifyHistoryChanged)
+    .catch((error: unknown) => {
+      console.warn('[history] 记录播放失败:', error instanceof Error ? error.message : error);
+    });
 }
 
 /**

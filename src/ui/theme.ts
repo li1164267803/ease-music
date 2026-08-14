@@ -114,10 +114,16 @@ export const IconSize = {
 /** 设计稿 `pad` 变量 = 20，即屏幕内容区的左右内边距。 */
 export const SCREEN_PADDING = 20;
 
-/** 底部 Dock（迷你播放器 + 标签栏）的总高度，用于给列表留出滚动余量。 */
+/**
+ * 底部 Dock（迷你播放器 + 标签栏）**自身**的高度：60 + 间距 8 + 60 + 下内距 12。
+ *
+ * **不要直接拿它当列表的 `paddingBottom`。** Dock 还压在安全区之上
+ * （`paddingBottom: 12 + insets.bottom`），实际占位比这个数多一个 `insets.bottom`。
+ * 列表请用 `useDockInset()`，它会把这一截补上。
+ */
 export const DOCK_HEIGHT = 138;
 
-/** 栈内页面只悬浮迷你播放器、没有标签栏，列表留出的余量相应少一截。 */
+/** 栈内页面只悬浮迷你播放器、没有标签栏。同上，列表请用 `useMiniDockInset()`。 */
 export const MINI_DOCK_HEIGHT = 78;
 
 /** 设计稿 Hero、封面等大图上的深色遮罩渐变（左透明 → 右不透明）。 */

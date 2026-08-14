@@ -17,9 +17,10 @@ import { SearchField } from '@/ui/search-field';
 import { SectionHead } from '@/ui/section-head';
 import { Sheet, SheetAction } from '@/ui/sheet';
 import { AppText } from '@/ui/text';
-import { Colors, DOCK_HEIGHT } from '@/ui/theme';
+import { Colors } from '@/ui/theme';
 import { TrackActionsSheet } from '@/ui/track-actions-sheet';
 import { TRACK_ROW_GAP, TrackRow } from '@/ui/track-row';
+import { useDockInset } from '@/ui/bottom-dock';
 
 const SORTS: { key: TrackSortKey; label: string }[] = [
   { key: 'addedAt', label: '最近添加' },
@@ -33,6 +34,7 @@ const SORTS: { key: TrackSortKey; label: string }[] = [
  * 输入后就地变成结果列表。
  */
 export default function SearchScreen() {
+  const dockInset = useDockInset();
   const [sortBy, setSortBy] = useState<TrackSortKey>('addedAt');
   const [keyword, setKeyword] = useState('');
   const [sorting, setSorting] = useState(false);
@@ -75,7 +77,7 @@ export default function SearchScreen() {
         <FlashList
           data={tracks}
           keyExtractor={(track) => track.id}
-          contentContainerStyle={{ paddingBottom: DOCK_HEIGHT }}
+          contentContainerStyle={{ paddingBottom: dockInset }}
           ItemSeparatorComponent={() => <View style={{ height: TRACK_ROW_GAP }} />}
           showsVerticalScrollIndicator={false}
           renderItem={({ item, index }) => (

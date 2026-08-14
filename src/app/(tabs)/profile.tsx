@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Download,
   HardDrive,
+  History,
   ListOrdered,
   Puzzle,
   Repeat,
@@ -17,6 +18,8 @@ import { Pressable, ScrollView, View } from 'react-native';
 
 import { getCacheUsage } from '@/cache/repository';
 import { PLAY_MODE_LABELS, PLAY_MODES } from '@/domain/model/playback';
+import { clearPlaybackHistory } from '@/history/repository';
+import { notifyHistoryChanged, useHistoryCount } from '@/history/store';
 import { useCollections, useLibraryQuery, usePlaylists } from '@/library/store';
 import { setPlayMode } from '@/playback/player';
 import { usePlayback } from '@/playback/use-playback';
@@ -24,14 +27,17 @@ import { Plugins } from '@/plugins';
 import { formatBytes } from '@/ui/format';
 import { ImportSheet } from '@/ui/import-sheet';
 import { Screen } from '@/ui/screen';
+import { Sheet, SheetAction } from '@/ui/sheet';
 import { AppText } from '@/ui/text';
-import { Colors, DOCK_HEIGHT } from '@/ui/theme';
+import { Colors } from '@/ui/theme';
+import { useDockInset } from '@/ui/bottom-dock';
 
 /**
  * 我的。设计稿的标签栏画了这个目的地但没有画屏——这里按设计稿的卡片语言收纳
  * 曲库概览、与播放相关的设置，以及产品定位要求必须露出的免责声明。
  */
 export default function ProfileScreen() {
+  const dockInset = useDockInset();
   const router = useRouter();
   const playback = usePlayback();
 
@@ -40,8 +46,10 @@ export default function ProfileScreen() {
   const trackCount = albums.reduce((total, album) => total + album.tracks.length, 0);
 
   const usage = useLibraryQuery(() => getCacheUsage(), []);
+  const historyCount = useHistoryCount();
 
   const [importing, setImporting] = useState(false);
+  const [clearingHistory, setClearingHistory] = useState(false);
 
   const cycleMode = () => {
     const index = PLAY_MODES.indexOf(playback.playMode);
@@ -58,7 +66,7 @@ export default function ProfileScreen() {
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ gap: 18, paddingBottom: DOCK_HEIGHT }}
+        contentContainerStyle={{ gap: 18, paddingBottom: dockInset }}
       >
         <View
           style={{
@@ -100,6 +108,16 @@ export default function ProfileScreen() {
             onPress={() => router.push('/downloads')}
           />
           {/*
+            播放历史没有独立的管理页——它只有「看」和「清」两个动作，看在发现页，
+            清就在这里。为它单开一屏只会多一次跳转。
+          */}
+          <Row
+            Icon={History}
+            label="播放历史"
+            value={historyCount > 0 ? `${historyCount} 首` : '无'}
+            onPress={() => setClearingHistory(true)}
+          />
+          {/*
             插件入口只在具备插件能力的平台上存在。iOS 侧 `supported` 恒为 false，
             这一行整个不渲染——plugin-source spec 要求 iOS 上不存在任何插件相关入口，
             而不是渲染一个「不可用」的入口。
@@ -125,6 +143,28 @@ export default function ProfileScreen() {
       </ScrollView>
 
       <ImportSheet visible={importing} onClose={() => setImporting(false)} />
+
+      <Sheet
+        visible={clearingHistory}
+        title="清空播放历史"
+        onClose={() => setClearingHistory(false)}
+      >
+        {historyCount > 0 ? (
+          <SheetAction
+            label={`清除全部 ${historyCount} 条播放记录`}
+            hint="只清除播放记录，曲库中的曲目一首不少，已下载的内容也一首不少"
+            danger
+            onPress={() => {
+              void clearPlaybackHistory().then(notifyHistoryChanged);
+              setClearingHistory(false);
+            }}
+          />
+        ) : (
+          <AppText size={12} color={Colors.textMuted}>
+            还没有播放记录。播放过的曲目会出现在发现页的「最近播放」里。
+          </AppText>
+        )}
+      </Sheet>
     </Screen>
   );
 }

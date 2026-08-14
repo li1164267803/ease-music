@@ -90,6 +90,26 @@ const MIGRATIONS: Migration[] = [
       ALTER TABLE track_cache ADD COLUMN duration_ms INTEGER;
     `,
   },
+  {
+    version: 4,
+    up: `
+      -- add-playback-history/design.md 决策 1：播放历史同样是曲目的**外部**事实，
+      -- 独立成表。理由比缓存更强——历史每切一首歌就写一次，若把「最后播放时间」写在
+      -- 曲目行上，用户连着听十首就会触发十次全库重查（曲库刷新是全局广播）。
+      --
+      -- 每首曲目只有一行（track_id 为主键）：产品决定是「只留最近一次 + 计次数」，
+      -- 不保留每次播放的流水。play_count 本次界面不展示，但记录时顺手就能维护，
+      -- 事后再补则面对一个回填不了的空洞——播放次数推算不出来（决策 6）。
+      CREATE TABLE playback_history (
+        track_id       TEXT    PRIMARY KEY NOT NULL REFERENCES tracks (id) ON DELETE CASCADE,
+        last_played_at INTEGER NOT NULL,
+        play_count     INTEGER NOT NULL DEFAULT 1
+      );
+
+      -- 历史的唯一读法就是「按最后播放时间倒序」，裁剪上限时也依赖它。
+      CREATE INDEX idx_playback_history_played ON playback_history (last_played_at DESC);
+    `,
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0;

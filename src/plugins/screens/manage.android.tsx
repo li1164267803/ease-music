@@ -20,7 +20,8 @@ import { UserVariablesSheet } from '@/plugins/ui/user-variables-sheet';
 import { Screen } from '@/ui/screen';
 import { Sheet, SheetAction } from '@/ui/sheet';
 import { AppText } from '@/ui/text';
-import { Colors, Font, IconSize, MINI_DOCK_HEIGHT } from '@/ui/theme';
+import { Colors, Font, IconSize } from '@/ui/theme';
+import { useMiniDockInset } from '@/ui/mini-player';
 
 type PendingConfirmation = Extract<InstallOutcome, { kind: 'needs-confirmation' }>;
 
@@ -31,6 +32,7 @@ type PendingConfirmation = Extract<InstallOutcome, { kind: 'needs-confirmation' 
  * 也是本产品定位的根基：从哪里获得插件完全由用户决定。
  */
 export default function PluginManageScreen() {
+  const dockInset = useMiniDockInset();
   const router = useRouter();
 
   const [plugins, setPlugins] = useState<PluginSummary[]>(listPlugins);
@@ -118,7 +120,7 @@ export default function PluginManageScreen() {
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ gap: 14, paddingBottom: MINI_DOCK_HEIGHT }}
+        contentContainerStyle={{ gap: 14, paddingBottom: dockInset }}
       >
         {plugins.length === 0 ? (
           <AppText size={12} color={Colors.textMuted} lineHeight={19}>
