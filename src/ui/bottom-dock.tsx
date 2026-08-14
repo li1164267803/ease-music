@@ -8,7 +8,22 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MiniPlayer } from '@/ui/mini-player';
 import { AppText } from '@/ui/text';
-import { Colors } from '@/ui/theme';
+import { Colors, DOCK_HEIGHT } from '@/ui/theme';
+
+/**
+ * 标签页里的列表底部要留出的余量。
+ *
+ * `DOCK_HEIGHT` 只是 Dock 自身的高度，而 Dock 是 `position: absolute` 压在内容之上、
+ * 并额外垫了 `12 + insets.bottom`。手势导航的设备上 `insets.bottom` 有近 20dp，
+ * 静态常量因此**总是短这一截**——列表滚到底时最后一行会被 Dock 盖住，看起来像是划不动了。
+ * 实测这台 1080×2400 的设备：Dock 实占 156dp，常量 138dp，差的正是导航条。
+ *
+ * 顺带一提，没有曲目在播时迷你播放器整个不渲染，Dock 会矮 68dp，此时这个余量偏大。
+ * 不去修正它——多留一点是白边，少留一点是遮挡，两者代价不对等。
+ */
+export function useDockInset(): number {
+  return DOCK_HEIGHT + useSafeAreaInsets().bottom;
+}
 
 const TAB_ICONS = {
   index: House,

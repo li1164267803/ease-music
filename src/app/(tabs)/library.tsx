@@ -25,7 +25,8 @@ import { SearchField } from '@/ui/search-field';
 import { SectionHead } from '@/ui/section-head';
 import { Sheet, SheetAction } from '@/ui/sheet';
 import { AppText } from '@/ui/text';
-import { Colors, DOCK_HEIGHT } from '@/ui/theme';
+import { Colors } from '@/ui/theme';
+import { useDockInset } from '@/ui/bottom-dock';
 
 /** 设计稿 Grid：两列，列间距 16、行间距 18，卡片封面高 152。 */
 const COLUMN_GAP = 16;
@@ -51,6 +52,7 @@ type Entry = {
 };
 
 export default function LibraryScreen() {
+  const dockInset = useDockInset();
   const router = useRouter();
 
   const [category, setCategory] = useState<Category>('playlist');
@@ -150,7 +152,7 @@ export default function LibraryScreen() {
       ) : (
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ gap: ROW_GAP, paddingBottom: DOCK_HEIGHT }}
+          contentContainerStyle={{ gap: ROW_GAP, paddingBottom: dockInset }}
           showsVerticalScrollIndicator={false}
         >
           {rows.map((row) => (

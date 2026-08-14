@@ -8,10 +8,10 @@ import { Pressable, View } from 'react-native';
 
 import { clearQueue, playTrackAt, removeFromQueue } from '@/playback/player';
 import { usePlayback } from '@/playback/use-playback';
-import { FloatingMiniPlayer } from '@/ui/mini-player';
+import { FloatingMiniPlayer, useMiniDockInset } from '@/ui/mini-player';
 import { Screen } from '@/ui/screen';
 import { AppText } from '@/ui/text';
-import { Colors, MINI_DOCK_HEIGHT } from '@/ui/theme';
+import { Colors } from '@/ui/theme';
 import { TRACK_ROW_GAP, TrackRow } from '@/ui/track-row';
 
 /**
@@ -19,6 +19,7 @@ import { TRACK_ROW_GAP, TrackRow } from '@/ui/track-row';
  * 而不是底部标签的目的地。
  */
 export default function QueueScreen() {
+  const dockInset = useMiniDockInset();
   const playback = usePlayback();
   const router = useRouter();
 
@@ -50,7 +51,7 @@ export default function QueueScreen() {
         <FlashList
           data={[...playback.queue]}
           keyExtractor={(track) => track.id}
-          contentContainerStyle={{ paddingBottom: MINI_DOCK_HEIGHT }}
+          contentContainerStyle={{ paddingBottom: dockInset }}
           ItemSeparatorComponent={() => <View style={{ height: TRACK_ROW_GAP }} />}
           showsVerticalScrollIndicator={false}
           renderItem={({ item, index }) => (

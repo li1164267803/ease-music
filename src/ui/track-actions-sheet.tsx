@@ -11,6 +11,8 @@ import {
   listPlaylistIdsOfTrack,
   removeTrackFromPlaylist,
 } from '@/domain/repository/playlist-repository';
+import { deletePlayRecord } from '@/history/repository';
+import { notifyHistoryChanged } from '@/history/store';
 import { removeTrackFromLibrary } from '@/library/actions';
 import { notifyLibraryChanged, useLibraryQuery, usePlaylists } from '@/library/store';
 import { appendToQueue } from '@/playback/player';
@@ -22,10 +24,17 @@ type TrackActionsSheetProps = {
   track: Track | null;
   /** 在歌单详情页打开时传入，用于提供「从本歌单移除」 */
   playlistId?: string;
+  /** 从「最近播放」区块打开时置为 true，用于提供「从最近播放移除」 */
+  inHistory?: boolean;
   onClose: () => void;
 };
 
-export function TrackActionsSheet({ track, playlistId, onClose }: TrackActionsSheetProps) {
+export function TrackActionsSheet({
+  track,
+  playlistId,
+  inHistory = false,
+  onClose,
+}: TrackActionsSheetProps) {
   const [mode, setMode] = useState<'actions' | 'playlists'>('actions');
 
   const close = () => {
@@ -67,6 +76,20 @@ export function TrackActionsSheet({ track, playlistId, onClose }: TrackActionsSh
               }}
             />
           ) : null}
+          {inHistory ? (
+            <SheetAction
+              label="从最近播放移除"
+              hint="只删这一条播放记录，曲目仍在曲库中"
+              onPress={() => {
+                void deletePlayRecord(track.id).then(notifyHistoryChanged);
+                close();
+              }}
+            />
+          ) : null}
+          {/*
+            与上一项只隔一行，差别必须由副文案说清：这一项把曲目从**曲库**拿掉，
+            那一项只删一条记录。两者都不删设备上的文件。
+          */}
           <SheetAction
             label="从曲库移除"
             hint="不会删除设备上的原始文件"

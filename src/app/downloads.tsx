@@ -11,11 +11,11 @@ import { listDownloadedTracks, type DownloadedTrack } from '@/cache/repository';
 import { useLibraryQuery } from '@/library/store';
 import { playQueue } from '@/playback/player';
 import { formatBytes, formatDuration } from '@/ui/format';
-import { FloatingMiniPlayer } from '@/ui/mini-player';
+import { FloatingMiniPlayer, useMiniDockInset } from '@/ui/mini-player';
 import { Screen } from '@/ui/screen';
 import { Sheet, SheetAction } from '@/ui/sheet';
 import { AppText } from '@/ui/text';
-import { Colors, MINI_DOCK_HEIGHT } from '@/ui/theme';
+import { Colors } from '@/ui/theme';
 import { TrackRow, TRACK_ROW_GAP } from '@/ui/track-row';
 
 /**
@@ -25,6 +25,7 @@ import { TrackRow, TRACK_ROW_GAP } from '@/ui/track-row';
  * 从不因为空间紧张、总量超阈值或长期未播而自行删除任何一首。这个页面就是那个「摊开」。
  */
 export default function DownloadsScreen() {
+  const dockInset = useMiniDockInset();
   const router = useRouter();
 
   const downloaded = useLibraryQuery(() => listDownloadedTracks(), []) ?? [];
@@ -72,7 +73,7 @@ export default function DownloadsScreen() {
       ) : (
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ gap: TRACK_ROW_GAP, paddingBottom: MINI_DOCK_HEIGHT }}
+          contentContainerStyle={{ gap: TRACK_ROW_GAP, paddingBottom: dockInset }}
           showsVerticalScrollIndicator={false}
         >
           {downloaded.map((item, index) => (

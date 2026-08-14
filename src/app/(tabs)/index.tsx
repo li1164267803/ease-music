@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
 import type { Track } from '@/domain/model/track';
+import { useRecentlyPlayed } from '@/history/store';
 import { playPlaylist } from '@/library/actions';
 import { useCollections, usePlaylists, useTracks } from '@/library/store';
 import { playQueue } from '@/playback/player';
@@ -19,26 +20,38 @@ import { MediaCard } from '@/ui/media-card';
 import { Screen } from '@/ui/screen';
 import { SectionHead } from '@/ui/section-head';
 import { AppText } from '@/ui/text';
-import { Colors, DOCK_HEIGHT, SCREEN_PADDING, SCRIM_GRADIENT } from '@/ui/theme';
+import { Colors, SCREEN_PADDING, SCRIM_GRADIENT } from '@/ui/theme';
 import { TrackActionsSheet } from '@/ui/track-actions-sheet';
 import { TRACK_ROW_GAP, TrackRow } from '@/ui/track-row';
+import { useDockInset } from '@/ui/bottom-dock';
 
 /** 发现页顶部胶囊里最多列出的歌单数量，超出的部分在音乐库页看。 */
 const CHIP_LIMIT = 4;
 /** 「为你推荐」横滑里最多展示的专辑数量。 */
 const CAROUSEL_LIMIT = 10;
-/** 「最近添加」列出的曲目数量，与设计稿一致。 */
+/** 这一区块列出的曲目数量，与设计稿一致。 */
 const RECENT_LIMIT = 3;
 
 const DAY = 86400000;
 
 export default function DiscoverScreen() {
+  const dockInset = useDockInset();
   const router = useRouter();
   const playback = usePlayback();
 
   const playlists = usePlaylists();
   const albums = useCollections('album');
-  const recent = useTracks('addedAt', '');
+  const added = useTracks('addedAt', '');
+  const played = useRecentlyPlayed(RECENT_LIMIT);
+
+  /**
+   * 设计稿这一段是「最近播放」，历史为空时回退到「最近添加」（design.md 决策 5）。
+   *
+   * 回退不是凑数：这一屏是首页，而新用户打开时历史必然为空——摆一句「还没有播放
+   * 记录」等于让首页开天窗，此时「最近添加」正是他刚导入的东西，是当下最该被点开的。
+   */
+  const showPlayed = played.length > 0;
+  const recent = showPlayed ? played.map((item) => item.track) : added;
 
   // null 代表「全部」，此时 Hero 展示当日精选；选中某个歌单则 Hero 换成它
   const [pinned, setPinned] = useState<string | null>(null);
@@ -54,7 +67,7 @@ export default function DiscoverScreen() {
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ gap: 22, paddingBottom: DOCK_HEIGHT }}
+        contentContainerStyle={{ gap: 22, paddingBottom: dockInset }}
       >
         <View
           style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
@@ -182,12 +195,8 @@ export default function DiscoverScreen() {
 
         {recent.length > 0 ? (
           <View style={{ gap: 14 }}>
-            {/*
-              设计稿这一段是「最近播放」。播放历史属于 C3，在它落地之前这里展示的是
-              最近添加——宁可标题与设计稿差一个词，也不拿别的数据冒充播放历史。
-            */}
             <SectionHead
-              title="最近添加"
+              title={showPlayed ? '最近播放' : '最近添加'}
               trailing="全部"
               onTrailingPress={() => router.push('/search')}
             />
@@ -206,7 +215,12 @@ export default function DiscoverScreen() {
         ) : null}
       </ScrollView>
 
-      <TrackActionsSheet track={actionsFor} onClose={() => setActionsFor(null)} />
+      {/* 只有展示的是最近播放时才给出「从最近播放移除」——回退到最近添加时它无从谈起 */}
+      <TrackActionsSheet
+        track={actionsFor}
+        inHistory={showPlayed}
+        onClose={() => setActionsFor(null)}
+      />
     </Screen>
   );
 }

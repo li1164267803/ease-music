@@ -32,12 +32,12 @@ import { Artwork } from '@/ui/artwork';
 import { CircleButton } from '@/ui/circle-button';
 import { formatRelativeDay, formatTotalDuration } from '@/ui/format';
 import { IndexedTrackRow } from '@/ui/indexed-track-row';
-import { FloatingMiniPlayer } from '@/ui/mini-player';
+import { FloatingMiniPlayer, useMiniDockInset } from '@/ui/mini-player';
 import { NameSheet } from '@/ui/name-sheet';
 import { Screen } from '@/ui/screen';
 import { Sheet, SheetAction } from '@/ui/sheet';
 import { AppText } from '@/ui/text';
-import { Colors, MINI_DOCK_HEIGHT } from '@/ui/theme';
+import { Colors } from '@/ui/theme';
 import { TrackActionsSheet } from '@/ui/track-actions-sheet';
 
 /**
@@ -79,6 +79,7 @@ function describeQueue({ pending, completed, failed }: DownloadQueueSnapshot): s
 }
 
 export default function PlaylistDetailScreen() {
+  const dockInset = useMiniDockInset();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const playback = usePlayback();
@@ -206,7 +207,7 @@ export default function PlaylistDetailScreen() {
       <ReorderableList
         data={tracks}
         keyExtractor={(track) => track.id}
-        contentContainerStyle={{ paddingBottom: MINI_DOCK_HEIGHT, gap: 2 }}
+        contentContainerStyle={{ paddingBottom: dockInset, gap: 2 }}
         showsVerticalScrollIndicator={false}
         onReorder={({ from, to }) => {
           const order = reorderItems(tracks, from, to).map((track) => track.id);

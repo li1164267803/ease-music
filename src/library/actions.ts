@@ -5,6 +5,7 @@ import { deleteDownload } from '@/cache/queue';
 import { SOURCE_LOCAL_FILE } from '@/domain/model/track';
 import { listPlaylistTracks } from '@/domain/repository/playlist-repository';
 import { getTrack, listTracks, removeTrack } from '@/domain/repository/track-repository';
+import { notifyHistoryChanged } from '@/history/store';
 import { pruneArtwork } from '@/library/artwork';
 import { playQueue } from '@/playback/player';
 import { discardManagedFile } from '@/sources/local-file';
@@ -17,12 +18,14 @@ import { discardManagedFile } from '@/sources/local-file';
  *
  * - **用户设备上的原始文件一律不动**（music-library spec 的硬性要求）：Android 侧
  *   指向的就是用户的原文件，远程与插件曲目的资源在来源那一侧，都不属于应用。
- * - **应用自己为这首曲目产生的派生文件一并清掉**：iOS 导入时复制进沙箱的那份副本、
- *   离线缓存下载的音频、提取出来落盘的封面。它们不是用户的资产，曲目记录消失后
- *   再无从界面触达，留着只会占存储且无法被清理。
+ * - **应用自己为这首曲目产生的派生物一并清掉**：iOS 导入时复制进沙箱的那份副本、
+ *   离线缓存下载的音频、提取出来落盘的封面、以及它的播放记录。它们不是用户的资产，
+ *   曲目记录消失后再无从界面触达，留着只会占存储、或在界面上留下点不响的条目。
  *
  * 缓存必须在删除曲目行**之前**清：`track_cache` 的外键是 ON DELETE CASCADE，
- * 曲目一删记录就没了，那时再想找缓存文件的路径已经无从查起。
+ * 曲目一删记录就没了，那时再想找缓存文件的路径已经无从查起。播放历史没有这个
+ * 问题——它只有一行数据、没有对应的文件，交给 CASCADE 删掉即可，这里只需在删完
+ * 之后发一次广播，让「最近播放」把它去掉。
  */
 export async function removeTrackFromLibrary(trackId: string): Promise<void> {
   const track = await getTrack(trackId);
@@ -30,6 +33,7 @@ export async function removeTrackFromLibrary(trackId: string): Promise<void> {
 
   await deleteDownload(trackId);
   await removeTrack(trackId);
+  notifyHistoryChanged();
 
   if (track.sourceId === SOURCE_LOCAL_FILE) discardManagedFile(track.sourceRef);
 

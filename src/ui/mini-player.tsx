@@ -10,7 +10,12 @@ import { next, togglePlayPause } from '@/playback/player';
 import { usePlayback } from '@/playback/use-playback';
 import { Artwork } from '@/ui/artwork';
 import { AppText } from '@/ui/text';
-import { Colors } from '@/ui/theme';
+import { Colors, MINI_DOCK_HEIGHT } from '@/ui/theme';
+
+/** 栈内页面（歌单详情、播放队列等）的列表余量。理由同 `useDockInset`。 */
+export function useMiniDockInset(): number {
+  return MINI_DOCK_HEIGHT + useSafeAreaInsets().bottom;
+}
 
 /** 设计稿 Mini Player：封面 42 + 曲目信息 + 播放/下一首，整体 8/12 内距、18 圆角。 */
 export function MiniPlayer() {
