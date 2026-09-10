@@ -2,6 +2,7 @@
 // Copyright (C) 2026 li1164267803 · 自在音乐 EaseMusic
 
 import type { CandidateTrack } from '@/domain/model/candidate-track';
+import type { Track } from '@/domain/model/track';
 import type { PluginUserVariable } from '@/plugins/protocol';
 
 /**
@@ -68,6 +69,8 @@ export type PluginsFacade = {
   list: () => PluginSummary[];
   /** 是否存在可用于搜索的插件。为 false 时搜索界面应说明原因而不是给一个空结果页。 */
   hasSearchable: () => boolean;
+  /** 是否装了歌词类插件。歌词区据此把「没找到」说准：是没装，还是装了也没搜到。 */
+  hasLyricPlugins: () => boolean;
 
   installFromFile: () => Promise<InstallOutcome>;
   installFromUrl: (url: string) => Promise<InstallOutcome>;
@@ -82,4 +85,16 @@ export type PluginsFacade = {
     page: number,
     platforms?: readonly string[],
   ) => Promise<PluginSearchOutcome>;
+
+  /**
+   * 曲目所属**来源插件**的歌词（add-lyrics-display/design.md 决策 2 的第一路：一步，精确）。
+   * 返回 LRC 或纯文本正文；曲目不属于插件、插件未装或未实现、调用失败都返回 null——
+   * 插件故障不打扰用户（plugin-source spec），调用方只需知道「这一路没取到」。
+   */
+  lyricForTrack: (track: Track) => Promise<string | null>;
+  /**
+   * 向**歌词类插件**按标题检索并取回歌词（同上第二路：两步，按标题匹配）。
+   * 对任意曲目适用，包括本地文件与远程直链。没有歌词类插件时返回 null。
+   */
+  searchLyric: (title: string) => Promise<string | null>;
 };

@@ -9,6 +9,7 @@ import {
   HardDrive,
   History,
   ListOrdered,
+  MicVocal,
   Puzzle,
   Repeat,
 } from 'lucide-react-native';
@@ -21,6 +22,8 @@ import { PLAY_MODE_LABELS, PLAY_MODES } from '@/domain/model/playback';
 import { clearPlaybackHistory } from '@/history/repository';
 import { notifyHistoryChanged, useHistoryCount } from '@/history/store';
 import { useCollections, useLibraryQuery, usePlaylists } from '@/library/store';
+import { describeDirectory } from '@/lyrics/directory';
+import { chooseLyricsDirectory, clearLyricsDirectory, useLyricsDirectory } from '@/lyrics/store';
 import { setPlayMode } from '@/playback/player';
 import { usePlayback } from '@/playback/use-playback';
 import { Plugins } from '@/plugins';
@@ -47,9 +50,11 @@ export default function ProfileScreen() {
 
   const usage = useLibraryQuery(() => getCacheUsage(), []);
   const historyCount = useHistoryCount();
+  const lyricsDirectory = useLyricsDirectory();
 
   const [importing, setImporting] = useState(false);
   const [clearingHistory, setClearingHistory] = useState(false);
+  const [editingLyricsDirectory, setEditingLyricsDirectory] = useState(false);
 
   const cycleMode = () => {
     const index = PLAY_MODES.indexOf(playback.playMode);
@@ -118,6 +123,16 @@ export default function ProfileScreen() {
             onPress={() => setClearingHistory(true)}
           />
           {/*
+            歌词目录是四处歌词来源里唯一需要用户配置的一处（add-lyrics-display）。
+            同样只有「看当前是哪个」「换」「清」三个动作，不单开一屏。
+          */}
+          <Row
+            Icon={MicVocal}
+            label="歌词目录"
+            value={lyricsDirectory ? describeDirectory(lyricsDirectory) : '未指定'}
+            onPress={() => setEditingLyricsDirectory(true)}
+          />
+          {/*
             插件入口只在具备插件能力的平台上存在。iOS 侧 `supported` 恒为 false，
             这一行整个不渲染——plugin-source spec 要求 iOS 上不存在任何插件相关入口，
             而不是渲染一个「不可用」的入口。
@@ -164,6 +179,37 @@ export default function ProfileScreen() {
             还没有播放记录。播放过的曲目会出现在发现页的「最近播放」里。
           </AppText>
         )}
+      </Sheet>
+
+      <Sheet
+        visible={editingLyricsDirectory}
+        title="歌词目录"
+        onClose={() => setEditingLyricsDirectory(false)}
+      >
+        <AppText size={12} color={Colors.textMuted} lineHeight={19}>
+          {lyricsDirectory
+            ? `当前：${describeDirectory(lyricsDirectory)}`
+            : '应用会在这个目录里按曲目标题查找歌词文件：「歌名.lrc」「歌名 - 歌手.lrc」或「歌手 - 歌名.lrc」，只支持 UTF-8 编码。'}
+        </AppText>
+        <SheetAction
+          label={lyricsDirectory ? '更换目录' : '选择目录'}
+          hint="更换后已缓存的歌词会按新目录重新查找"
+          onPress={() => {
+            setEditingLyricsDirectory(false);
+            void chooseLyricsDirectory();
+          }}
+        />
+        {lyricsDirectory ? (
+          <SheetAction
+            label="清除歌词目录"
+            hint="之后不再从目录查找歌词；目录里的文件不会被删除"
+            danger
+            onPress={() => {
+              setEditingLyricsDirectory(false);
+              void clearLyricsDirectory();
+            }}
+          />
+        ) : null}
       </Sheet>
     </Screen>
   );

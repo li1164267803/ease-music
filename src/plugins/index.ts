@@ -29,6 +29,7 @@ export const Plugins: PluginsFacade = {
   init: () => Promise.resolve(),
   list: () => [],
   hasSearchable: () => false,
+  hasLyricPlugins: () => false,
 
   installFromFile: () => Promise.resolve(UNSUPPORTED),
   installFromUrl: () => Promise.resolve(UNSUPPORTED),
@@ -39,4 +40,8 @@ export const Plugins: PluginsFacade = {
   saveUserVariables: () => Promise.resolve(),
 
   search: () => Promise.resolve({ candidates: [], continuing: [], failures: [] }),
+
+  // 歌词的另外三处来源与插件无关，iOS 上这两路自然为空，不需要平台分支。
+  lyricForTrack: () => Promise.resolve(null),
+  searchLyric: () => Promise.resolve(null),
 };

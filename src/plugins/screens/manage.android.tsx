@@ -292,10 +292,13 @@ function describeCapabilities(plugin: PluginSummary): string {
   const abilities: string[] = [];
   if (plugin.canSearchMusic) abilities.push('搜索');
   if (plugin.canResolveMedia) abilities.push('播放');
+  // 自述支持 lyric 检索的插件会被歌词区用来按标题找词（add-lyrics-display），
+  // 对本地文件与远程直链曲目同样有效——这是它在本应用里实际承担的能力。
+  if (plugin.declaredSearchTypes?.includes('lyric')) abilities.push('歌词');
   if (abilities.length > 0) return abilities.join(' · ');
 
-  // 有搜索能力但搜的不是歌（如歌词类插件）。如实说清楚它能搜什么、为什么用不上，
-  // 好过笼统地说「未提供搜索能力」——那会让用户以为插件坏了。
+  // 有搜索能力但搜的既不是歌也不是词（专辑、艺人、歌单）。如实说清楚它能搜什么、
+  // 为什么用不上，好过笼统地说「未提供搜索能力」——那会让用户以为插件坏了。
   const types = plugin.declaredSearchTypes;
   if (types && types.length > 0) {
     const labels = types.map((type) => SEARCH_TYPE_LABELS[type] ?? type).join('、');

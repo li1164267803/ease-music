@@ -52,6 +52,8 @@ const CORE = [
   'src/playback',
   'src/library',
   'src/cache',
+  'src/history',
+  'src/lyrics',
   'src/ui',
   'src/app',
 ];

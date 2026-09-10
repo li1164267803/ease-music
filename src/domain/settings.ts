@@ -15,6 +15,7 @@ import type { TrackSortKey } from '@/domain/model/track';
 const KEYS = {
   playMode: 'settings.playMode',
   librarySort: 'settings.librarySort',
+  lyricsDirectory: 'settings.lyricsDirectory',
 } as const;
 
 export async function loadPlayMode(): Promise<PlayMode> {
@@ -35,4 +36,19 @@ export async function loadLibrarySort(): Promise<TrackSortKey> {
 
 export async function saveLibrarySort(sort: TrackSortKey): Promise<void> {
   await Storage.setItemAsync(KEYS.librarySort, sort);
+}
+
+/**
+ * 用户指定的歌词目录（add-lyrics-display/design.md 决策 3）。存的是目录授权 URI，
+ * 未指定时为 null——这是四处歌词来源里唯一需要用户配置的一处，一个字符串不值得建表。
+ */
+export async function loadLyricsDirectory(): Promise<string | null> {
+  const raw = await Storage.getItemAsync(KEYS.lyricsDirectory);
+  return raw && raw.length > 0 ? raw : null;
+}
+
+/** 传 `null` 表示清除。 */
+export async function saveLyricsDirectory(uri: string | null): Promise<void> {
+  if (uri) await Storage.setItemAsync(KEYS.lyricsDirectory, uri);
+  else await Storage.removeItemAsync(KEYS.lyricsDirectory);
 }

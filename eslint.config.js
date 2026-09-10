@@ -59,6 +59,7 @@ module.exports = defineConfig([
                 '@/plugins/search',
                 '@/plugins/source',
                 '@/plugins/candidate',
+                '@/plugins/lyrics',
                 '@/plugins/protocol',
               ],
               message:
