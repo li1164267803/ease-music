@@ -33,6 +33,18 @@ function readRef(track: Track): LocalFileRef {
   };
 }
 
+/**
+ * 本地文件曲目的文件 URI，供需要**读文件内容**而不是播放它的能力使用（内嵌歌词）。
+ *
+ * 不是本地文件曲目、或记录损坏时返回 null 而不抛：那些调用方的语义都是「有就读，
+ * 没有就换别处找」，抛出只会逼它们各写一遍 try/catch。
+ */
+export function localFileUri(track: Track): string | null {
+  if (track.sourceId !== SOURCE_LOCAL_FILE) return null;
+  const { uri } = track.sourceRef;
+  return typeof uri === 'string' && uri.length > 0 ? uri : null;
+}
+
 export const localFileSource: MediaSource = {
   id: SOURCE_LOCAL_FILE,
   displayName: '本地文件',

@@ -43,6 +43,7 @@ const PLUGIN_IMPLEMENTATION = [
   'src/plugins/search.ts',
   'src/plugins/source.ts',
   'src/plugins/candidate.ts',
+  'src/plugins/lyrics.ts',
   'src/plugins/screens/manage.android.tsx',
   'src/plugins/screens/search.android.tsx',
 ];

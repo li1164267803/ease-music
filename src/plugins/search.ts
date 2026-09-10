@@ -15,7 +15,7 @@ import { searchablePlugins } from '@/plugins/manager';
  */
 const SEARCH_TYPE = 'music';
 
-type PluginPage = { items: unknown[]; isEnd: boolean };
+export type PluginPage = { items: unknown[]; isEnd: boolean };
 
 /**
  * 取一页搜索结果。
@@ -78,7 +78,8 @@ async function searchOne(
   }
 }
 
-function parsePage(raw: unknown): PluginPage | null {
+/** 搜索结果页的形状校验。歌词类插件的 `search(…, 'lyric')` 返回同一形状，那边复用。 */
+export function parsePage(raw: unknown): PluginPage | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const result = raw as Record<string, unknown>;
 

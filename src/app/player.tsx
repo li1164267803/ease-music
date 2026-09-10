@@ -32,6 +32,7 @@ import {
   setPlayMode,
   togglePlayPause,
 } from '@/playback/player';
+import { LyricsCard } from '@/lyrics/ui/lyrics-card';
 import { usePlayback } from '@/playback/use-playback';
 import { Artwork } from '@/ui/artwork';
 import { formatDuration } from '@/ui/format';
@@ -212,23 +213,7 @@ export default function PlayerScreen() {
             </AppText>
           </Pressable>
         ) : (
-          <View
-            style={{
-              borderRadius: 18,
-              backgroundColor: Colors.surface,
-              paddingVertical: 16,
-              paddingHorizontal: 18,
-              gap: 8,
-            }}
-          >
-            {/* 歌词是 C3 的能力，卡片先按设计稿占位，说明清楚而不是留一段假歌词 */}
-            <AppText size={15} weight="semibold" color={Colors.accent}>
-              暂无歌词
-            </AppText>
-            <AppText size={15} color={Colors.textMuted}>
-              本地 .lrc 与内嵌歌词将在后续版本支持
-            </AppText>
-          </View>
+          <LyricsCard />
         )}
 
         <View

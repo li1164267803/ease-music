@@ -2,7 +2,7 @@
 // Copyright (C) 2026 li1164267803 · 自在音乐 EaseMusic
 
 import { File } from 'expo-file-system';
-import { parseBuffer, type IPicture } from 'music-metadata';
+import { parseBuffer, type ILyricsTag, type IPicture } from 'music-metadata';
 
 import { sniffAudioExtension } from '@/domain/audio-format';
 
@@ -13,6 +13,11 @@ export type ParsedMetadata = {
   durationMs: number | null;
   trackNumber: number | null;
   picture: IPicture | null;
+  /**
+   * 文件内嵌的歌词标签，原样透出（同步的 SYLT 与非同步的 USLT 都在里面）。
+   * 导入流程不用它；歌词模块（add-lyrics-display）按需读取，解释交给那边。
+   */
+  lyrics: ILyricsTag[];
 };
 
 /**
@@ -97,6 +102,7 @@ async function tryParse(bytes: Uint8Array): Promise<ParseResult | null> {
         durationMs: format.duration != null ? Math.round(format.duration * 1000) : null,
         trackNumber: common.track?.no ?? null,
         picture: common.picture?.[0] ?? null,
+        lyrics: common.lyrics ?? [],
       },
       bitrate: format.bitrate ?? null,
     };

@@ -79,6 +79,27 @@ export function searchablePlugins(): LoadedPlugin[] {
     .filter((loaded): loaded is LoadedPlugin => loaded !== null && loaded.meta.canSearchMusic);
 }
 
+/** 某曲目所属的插件。未安装或加载失败时为 null，调用方按「这一路取不到」处理。 */
+export function getLoadedPlugin(platform: string): LoadedPlugin | null {
+  return ENTRIES.get(platform)?.loaded ?? null;
+}
+
+/**
+ * **歌词类**插件：自述支持 `lyric` 检索的插件（add-lyrics-display/design.md 决策 2）。
+ *
+ * 与 `canSearchMusic` 的缺省规则相反，这里要求**显式声明**：未声明 `supportedSearchType`
+ * 的插件按协议视为音乐插件，拿标题去向它做 `lyric` 检索只会拿回一页曲目条目——
+ * 形状合法、内容全错，用户看到的是别的歌的词。
+ */
+export function lyricPlugins(): LoadedPlugin[] {
+  return [...ENTRIES.values()]
+    .map((entry) => entry.loaded)
+    .filter(
+      (loaded): loaded is LoadedPlugin =>
+        loaded !== null && (loaded.meta.supportedSearchType?.includes('lyric') ?? false),
+    );
+}
+
 /**
  * 应用启动时加载全部已安装插件。
  *

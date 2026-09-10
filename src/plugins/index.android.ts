@@ -9,11 +9,13 @@ import {
   installFromFile,
   installFromUrl,
   listPlugins,
+  lyricPlugins,
   saveUserVariables,
   searchablePlugins,
   uninstallPlugin,
   updatePlugin,
 } from '@/plugins/manager';
+import { lyricForTrack, searchLyric } from '@/plugins/lyrics';
 import { searchPlugins } from '@/plugins/search';
 
 /**
@@ -32,6 +34,7 @@ export const Plugins: PluginsFacade = {
   init: initPlugins,
   list: listPlugins,
   hasSearchable: () => searchablePlugins().length > 0,
+  hasLyricPlugins: () => lyricPlugins().length > 0,
 
   installFromFile,
   installFromUrl,
@@ -42,4 +45,7 @@ export const Plugins: PluginsFacade = {
   saveUserVariables,
 
   search: searchPlugins,
+
+  lyricForTrack,
+  searchLyric,
 };

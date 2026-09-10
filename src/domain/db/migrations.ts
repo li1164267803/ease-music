@@ -110,6 +110,26 @@ const MIGRATIONS: Migration[] = [
       CREATE INDEX idx_playback_history_played ON playback_history (last_played_at DESC);
     `,
   },
+  {
+    version: 5,
+    up: `
+      -- add-lyrics-display/design.md 决策 4：歌词缓存与 track_cache、playback_history 同构，
+      -- 是曲目的**外部**事实，独立成表而不是给 tracks 加列；ON DELETE CASCADE 让
+      -- 「曲目没了、歌词还在」在数据库层面无法出现。
+      --
+      -- 缓存的是**歌词正文**（LRC 或纯文本原样），不是解析结果：解析只是一个正则加一次
+      -- 排序，读的时候重做即可；正文才是无法再次免费取得的东西——插件歌词要联网，
+      -- 内嵌歌词最坏要读整个音频文件。
+      --
+      -- source 记下这份歌词来自四处来源中的哪一处，将来要「按来源重新获取」时才分得开。
+      CREATE TABLE track_lyrics (
+        track_id   TEXT    PRIMARY KEY NOT NULL REFERENCES tracks (id) ON DELETE CASCADE,
+        content    TEXT    NOT NULL,
+        source     TEXT    NOT NULL,
+        fetched_at INTEGER NOT NULL
+      );
+    `,
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0;
