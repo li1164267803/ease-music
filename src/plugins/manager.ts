@@ -79,6 +79,19 @@ export function searchablePlugins(): LoadedPlugin[] {
     .filter((loaded): loaded is LoadedPlugin => loaded !== null && loaded.meta.canSearchMusic);
 }
 
+/**
+ * 具备发现能力的插件：榜单与推荐歌单至少实现其一（add-plugin-discovery-charts/design.md
+ * 决策 1）。发现首页只向具备对应能力的插件发起调用，未实现的那一种在该插件名下不出现。
+ */
+export function discoveryPlugins(): LoadedPlugin[] {
+  return [...ENTRIES.values()]
+    .map((entry) => entry.loaded)
+    .filter(
+      (loaded): loaded is LoadedPlugin =>
+        loaded !== null && (loaded.meta.canBrowseTopLists || loaded.meta.canBrowseSheets),
+    );
+}
+
 /** 某曲目所属的插件。未安装或加载失败时为 null，调用方按「这一路取不到」处理。 */
 export function getLoadedPlugin(platform: string): LoadedPlugin | null {
   return ENTRIES.get(platform)?.loaded ?? null;

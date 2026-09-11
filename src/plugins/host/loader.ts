@@ -112,6 +112,8 @@ function readMeta(instance: PluginInstance): PluginMeta {
       typeof instance.search === 'function' &&
       (supportedSearchType === null || supportedSearchType.includes('music')),
     canResolveMedia: typeof instance.getMediaSource === 'function',
+    canBrowseTopLists: typeof instance.getTopLists === 'function',
+    canBrowseSheets: typeof instance.getRecommendSheetTags === 'function',
   };
 }
 
