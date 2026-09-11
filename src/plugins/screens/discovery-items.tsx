@@ -3,7 +3,7 @@
 
 import { Redirect } from 'expo-router';
 
-/** 平台中立的插件标签下歌单列表——**空实现**，裁剪机制的说明见 `manage.tsx`。 */
-export default function PluginDiscoverySheetsScreen() {
+/** 平台中立的插件条目分页列表——**空实现**，裁剪机制的说明见 `manage.tsx`。 */
+export default function PluginDiscoveryItemsScreen() {
   return <Redirect href="/" />;
 }

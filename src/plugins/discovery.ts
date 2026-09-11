@@ -5,26 +5,39 @@ import type { CandidateTrack } from '@/domain/model/candidate-track';
 import { toCandidateTrack } from '@/plugins/candidate';
 import { invokePlugin } from '@/plugins/host/invoke';
 import type { LoadedPlugin } from '@/plugins/host/loader';
-import type { PluginMediaItem } from '@/plugins/protocol';
-import { parsePage, type PluginPage } from '@/plugins/search';
+import { parsePage, parseTrackPage } from '@/plugins/host/pages';
+import type { PluginMediaItem, PluginMeta } from '@/plugins/protocol';
 
 /**
- * 发现层：榜单与推荐歌单（add-plugin-discovery-charts/design.md 决策 5）。
+ * 发现层：榜单、推荐歌单、专辑、艺人（add-plugin-discovery-charts/design.md 决策 5，
+ * add-plugin-discovery-albums-artists/design.md 决策 4–6）。
  *
  * 每个协议方法一对 `call` / `parse`，全部经 `invokePlugin` 走同一条调用通道；本文件
  * 不做任何 try/catch 之外的兜底——未实现、抛错、超时、畸形四类故障都由通道归因为
  * `PluginCallError`，单个插件的失败由界面按插件分区呈现。
  *
- * 榜单项、歌单项、标签是插件自己的凭据：宿主只读取展示所需的几个字段，`raw` 原样保留，
- * 下一步调用时整个交回插件——它们内部可能带着插件选接口用的私有字段（spike 实测
- * 小蜗音乐的标签带 `digest`），宿主不解释也不裁剪。
+ * 榜单项、歌单项、专辑项、艺人项、标签是插件自己的凭据：宿主只读取展示所需的几个字段，
+ * `raw` 原样保留，下一步调用时整个交回插件——它们内部可能带着插件选接口用的私有字段
+ * （spike 实测小蜗音乐的标签带 `digest`），宿主不解释也不裁剪。
  */
 
-/** 榜单项或歌单项。两者在协议里同构，宿主用同一种展示对象承载。 */
+/** 榜单项、歌单项或专辑项。三者在协议里同构，宿主用同一种展示对象承载。 */
 export type DiscoveryItem = {
+  /** 提供该条目的插件。凭据只对它有意义；跨插件的列表（搜索结果）也靠它区分同名条目。 */
+  platform: string;
   id: string;
   title: string;
   artworkUri: string | null;
+  description: string | null;
+  raw: PluginMediaItem;
+};
+
+/** 艺人。协议里用 `name` 与 `avatar`，与条目的 `title` / `artwork` 不同，因此是另一种展示对象。 */
+export type DiscoveryArtist = {
+  platform: string;
+  id: string;
+  name: string;
+  avatarUri: string | null;
   description: string | null;
   raw: PluginMediaItem;
 };
@@ -39,10 +52,21 @@ export type DiscoveryTag = {
 /** 插件返回的分组。`pinned` 标签合并进来时没有标题。 */
 export type DiscoveryGroup<T> = { title: string | null; items: T[] };
 
-/** 候选曲目分页页要调用的方法。第二片的专辑、艺人详情在这里再加两个值（决策 3）。 */
-export type TrackListKind = 'toplist' | 'sheet';
+/** 候选曲目分页页要调用的方法。 */
+export type TrackListKind = 'toplist' | 'sheet' | 'album' | 'artist';
+
+/** 条目分页列表要调用的方法：标签下的歌单，或艺人的专辑。 */
+export type ItemListKind = 'sheet-tag' | 'artist-album';
 
 export type DiscoveryPage<T> = { items: T[]; isEnd: boolean };
+
+/** 列表的稳定 key。同一 id 在不同插件下是不同条目，因此必须带上插件。 */
+export function discoveryKey(entry: { platform: string; id: string }): string {
+  return `${entry.platform}:${entry.id}`;
+}
+
+/** 只需要凭据的参数：任何一种展示对象都行。 */
+type Credential = { raw: PluginMediaItem };
 
 export function fetchTopLists(plugin: LoadedPlugin): Promise<DiscoveryGroup<DiscoveryItem>[]> {
   const { meta, instance } = plugin;
@@ -50,7 +74,7 @@ export function fetchTopLists(plugin: LoadedPlugin): Promise<DiscoveryGroup<Disc
     platform: meta.platform,
     method: 'getTopLists',
     call: instance.getTopLists && (() => instance.getTopLists?.()),
-    parse: (raw) => (Array.isArray(raw) ? parseGroups(raw, toItem) : null),
+    parse: (raw) => (Array.isArray(raw) ? parseGroups(raw, (entry) => toItem(meta, entry)) : null),
   });
 }
 
@@ -70,38 +94,69 @@ export function fetchSheetTags(plugin: LoadedPlugin): Promise<DiscoveryGroup<Dis
   });
 }
 
-/** 标签下的歌单。返回形状与搜索同形（`{ isEnd?, data }`），`isEnd` 的缺省推断也沿用 `parsePage`。 */
-export async function fetchSheetsByTag(
+/**
+ * 一页条目：标签下的歌单，或艺人的专辑。两个方法的返回都与搜索同形（`{ isEnd?, data }`），
+ * `isEnd` 的缺省推断沿用 `parsePage`。
+ */
+export async function fetchItemPage(
   plugin: LoadedPlugin,
-  tag: DiscoveryTag,
+  kind: ItemListKind,
+  source: Credential,
   page: number,
 ): Promise<DiscoveryPage<DiscoveryItem>> {
   const { meta, instance } = plugin;
-  const result = await invokePlugin({
-    platform: meta.platform,
-    method: 'getRecommendSheetsByTag',
-    call:
-      instance.getRecommendSheetsByTag && (() => instance.getRecommendSheetsByTag?.(tag.raw, page)),
-    parse: parsePage,
-  });
-  return { items: parseItems(result.items, toItem), isEnd: result.isEnd };
+  const result =
+    kind === 'sheet-tag'
+      ? await invokePlugin({
+          platform: meta.platform,
+          method: 'getRecommendSheetsByTag',
+          call:
+            instance.getRecommendSheetsByTag &&
+            (() => instance.getRecommendSheetsByTag?.(source.raw, page)),
+          parse: parsePage,
+        })
+      : await invokePlugin({
+          platform: meta.platform,
+          method: 'getArtistWorks',
+          call:
+            instance.getArtistWorks && (() => instance.getArtistWorks?.(source.raw, page, 'album')),
+          parse: parsePage,
+        });
+  return { items: parseItems(result.items, (entry) => toItem(meta, entry)), isEnd: result.isEnd };
 }
 
-/** 榜单或歌单的一页曲目。畸形条目丢弃、其余继续（plugin-source spec）。 */
+/** 曲目在 `musicList` 里的三个详情方法。艺人作品的曲目在 `data` 里，单独处理。 */
+const TRACK_LIST_METHODS = {
+  toplist: 'getTopListDetail',
+  sheet: 'getMusicSheetInfo',
+  album: 'getAlbumInfo',
+} as const;
+
+/** 一页曲目。畸形条目丢弃、其余继续（plugin-source spec）。 */
 export async function fetchTrackPage(
   plugin: LoadedPlugin,
   kind: TrackListKind,
-  item: DiscoveryItem,
+  item: Credential,
   page: number,
 ): Promise<DiscoveryPage<CandidateTrack>> {
   const { meta, instance } = plugin;
-  const method = kind === 'toplist' ? 'getTopListDetail' : 'getMusicSheetInfo';
-  const result = await invokePlugin({
-    platform: meta.platform,
-    method,
-    call: instance[method] && (() => instance[method]?.(item.raw, page)),
-    parse: parseTrackPage,
-  });
+  const result =
+    kind === 'artist'
+      ? await invokePlugin({
+          platform: meta.platform,
+          method: 'getArtistWorks',
+          call:
+            instance.getArtistWorks && (() => instance.getArtistWorks?.(item.raw, page, 'music')),
+          parse: parsePage,
+        })
+      : await invokePlugin({
+          platform: meta.platform,
+          method: TRACK_LIST_METHODS[kind],
+          call:
+            instance[TRACK_LIST_METHODS[kind]] &&
+            (() => instance[TRACK_LIST_METHODS[kind]]?.(item.raw, page)),
+          parse: parseTrackPage,
+        });
 
   const candidates: CandidateTrack[] = [];
   for (const entry of result.items) {
@@ -109,18 +164,6 @@ export async function fetchTrackPage(
     if (candidate) candidates.push(candidate);
   }
   return { items: candidates, isEnd: result.isEnd };
-}
-
-/**
- * 榜单详情与歌单详情的形状校验：曲目在 `musicList`，而不是搜索的 `data`。
- *
- * `isEnd` 缺省视为**已到底**，与 `parsePage`「结果为空才算到底」相反（决策 5）。spike
- * 实测：不分页的插件不给 `isEnd`，且对任何页码都返回同一整页——按搜索的规则会无休止地
- * 把同一页追加下去；会分页的插件都给了它。
- */
-export function parseTrackPage(raw: unknown): PluginPage | null {
-  if (!isRecord(raw) || !Array.isArray(raw.musicList)) return null;
-  return { items: raw.musicList, isEnd: typeof raw.isEnd === 'boolean' ? raw.isEnd : true };
 }
 
 function parseGroups<T>(
@@ -147,17 +190,34 @@ function parseItems<T>(raw: unknown[], convert: (entry: unknown) => T | null): T
 }
 
 /** `id` 与 `title` 缺一即丢弃该条；其余可空。 */
-function toItem(raw: unknown): DiscoveryItem | null {
+export function toItem(meta: PluginMeta, raw: unknown): DiscoveryItem | null {
   if (!isRecord(raw)) return null;
   const id = readId(raw.id);
   const title = readString(raw.title);
   if (!id || !title) return null;
   return {
+    platform: meta.platform,
     id,
     title,
-    // 协议里榜单项的封面叫 coverImg、歌单项叫 artwork，两个字段名都是协议事实而非对
-    // 个别插件的兼容（spike 实测：网易两者都给，小蜗榜单用前者、歌单用后者）
+    // 协议里榜单项的封面叫 coverImg、歌单与专辑项叫 artwork，两个字段名都是协议事实而非
+    // 对个别插件的兼容（spike 实测：网易两者都给，小蜗榜单用前者、歌单用后者）
     artworkUri: readString(raw.coverImg) ?? readString(raw.artwork),
+    description: readString(raw.description),
+    raw,
+  };
+}
+
+/** `id` 与 `name` 缺一即丢弃该条。 */
+export function toArtist(meta: PluginMeta, raw: unknown): DiscoveryArtist | null {
+  if (!isRecord(raw)) return null;
+  const id = readId(raw.id);
+  const name = readString(raw.name);
+  if (!id || !name) return null;
+  return {
+    platform: meta.platform,
+    id,
+    name,
+    avatarUri: readString(raw.avatar),
     description: readString(raw.description),
     raw,
   };

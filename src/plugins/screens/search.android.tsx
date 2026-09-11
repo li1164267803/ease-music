@@ -10,34 +10,52 @@ import { ActivityIndicator, Pressable, View } from 'react-native';
 import { candidateKey, type CandidateTrack } from '@/domain/model/candidate-track';
 import { addCandidateTrack } from '@/library/import';
 import { notifyLibraryChanged } from '@/library/store';
+import { discoveryKey } from '@/plugins/discovery';
 import { searchablePlugins } from '@/plugins/manager';
-import { searchPlugins } from '@/plugins/search';
+import { CONTENT_SEARCH_TYPES, type ContentSearchType } from '@/plugins/protocol';
+import { searchPlugins, type SearchFailure, type SearchPage } from '@/plugins/search';
 import { CandidateRow } from '@/plugins/ui/candidate-row';
+import { DiscoveryArtistRow } from '@/plugins/ui/discovery-artist-row';
+import { DiscoveryItemRow } from '@/plugins/ui/discovery-item-row';
+import { Chip } from '@/ui/chip';
 import { Screen } from '@/ui/screen';
 import { SearchField } from '@/ui/search-field';
 import { AppText } from '@/ui/text';
 import { Colors, IconSize } from '@/ui/theme';
 import { useMiniDockInset } from '@/ui/mini-player';
 
+const TYPE_LABELS: Record<ContentSearchType, string> = {
+  music: '歌曲',
+  album: '专辑',
+  artist: '艺人',
+  sheet: '歌单',
+};
+
+/** 一页结果去掉游标与失败之后剩下的部分：界面按 `type` 决定渲染哪种行。 */
+type Results = Pick<SearchPage, 'type' | 'items'>;
+
+const EMPTY: Results = { type: 'music', items: [] };
+
 /**
  * 插件搜索。
  *
- * 结果是**尚未加入曲库的候选曲目**（design.md 决策 3）：用户不选择加入，曲库、歌单与
- * 曲库检索都不会发生任何变化。加入之后它与本地文件曲目完全同权。
+ * 四种类型各自的结果形状不同：歌曲是**尚未加入曲库的候选曲目**（用户不选择加入，曲库、
+ * 歌单与曲库检索都不会发生任何变化），专辑与歌单是点开进曲目页的条目，艺人点开进艺人页。
  */
 export default function PluginSearchScreen() {
   const dockInset = useMiniDockInset();
   const router = useRouter();
 
   const [keyword, setKeyword] = useState('');
-  const [candidates, setCandidates] = useState<CandidateTrack[]>([]);
+  const [type, setType] = useState<ContentSearchType>('music');
+  const [results, setResults] = useState<Results>(EMPTY);
   const [continuing, setContinuing] = useState<string[]>([]);
-  const [failures, setFailures] = useState<{ platform: string; reason: string }[]>([]);
+  const [failures, setFailures] = useState<SearchFailure[]>([]);
   const [page, setPage] = useState(0);
   const [busy, setBusy] = useState(false);
   const [added, setAdded] = useState<ReadonlySet<string>>(new Set());
 
-  const hasSearchable = searchablePlugins().length > 0;
+  const hasSearchable = searchablePlugins(type).length > 0;
 
   const search = async (nextPage: number) => {
     const query = keyword.trim();
@@ -45,18 +63,30 @@ export default function PluginSearchScreen() {
 
     setBusy(true);
     try {
-      // 第一页查全部可搜索插件；后续页只查上一页表示「还有」的那些，
+      // 第一页查全部支持该类型的插件；后续页只查上一页表示「还有」的那些，
       // 避免向已经到底的插件反复要下一页。
-      const outcome = await searchPlugins(query, nextPage, nextPage === 1 ? undefined : continuing);
-      setCandidates((previous) =>
-        nextPage === 1 ? outcome.candidates : [...previous, ...outcome.candidates],
+      const outcome = await searchPlugins(
+        query,
+        nextPage,
+        type,
+        nextPage === 1 ? undefined : continuing,
       );
+      setResults((previous) => appendResults(nextPage === 1 ? null : previous, outcome));
       setContinuing(outcome.continuing);
       setFailures(outcome.failures);
       setPage(nextPage);
     } finally {
       setBusy(false);
     }
+  };
+
+  /** 切换类型即另一次搜索：旧类型的结果不能留在新类型的列表里。 */
+  const switchType = (next: ContentSearchType) => {
+    setType(next);
+    setResults(EMPTY);
+    setContinuing([]);
+    setFailures([]);
+    setPage(0);
   };
 
   const add = async (candidate: CandidateTrack) => {
@@ -76,23 +106,35 @@ export default function PluginSearchScreen() {
         </AppText>
       </View>
 
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        {CONTENT_SEARCH_TYPES.map((candidate) => (
+          <Chip
+            key={candidate}
+            label={TYPE_LABELS[candidate]}
+            active={candidate === type}
+            onPress={() => switchType(candidate)}
+          />
+        ))}
+      </View>
+
       {hasSearchable ? (
         <SearchField
           value={keyword}
           onChangeText={setKeyword}
-          placeholder="输入歌曲名或艺人"
+          placeholder={`输入${TYPE_LABELS[type]}名或关键词`}
           onSubmitEditing={() => void search(1)}
         />
       ) : null}
 
       {!hasSearchable ? (
         <AppText size={12} color={Colors.textMuted} lineHeight={19}>
-          当前没有可用于搜索的插件。已安装的插件中没有提供搜索能力的，或者你还没有安装任何插件。
+          当前没有支持搜索{TYPE_LABELS[type]}
+          的插件。已安装的插件中没有声明支持这一类型的，或者你还没有安装任何插件。
         </AppText>
       ) : (
         <FlashList
-          data={candidates}
-          keyExtractor={candidateKey}
+          data={results.items}
+          keyExtractor={resultKey}
           contentContainerStyle={{ paddingBottom: dockInset }}
           ItemSeparatorComponent={() => <View style={{ height: 15 }} />}
           showsVerticalScrollIndicator={false}
@@ -103,7 +145,7 @@ export default function PluginSearchScreen() {
           ListEmptyComponent={
             busy ? null : (
               <AppText size={12} color={Colors.textMuted}>
-                {page === 0 ? '输入关键词后回车开始搜索。' : '没有找到匹配的曲目。'}
+                {page === 0 ? '输入关键词后回车开始搜索。' : `没有找到匹配的${TYPE_LABELS[type]}。`}
               </AppText>
             )
           }
@@ -117,15 +159,39 @@ export default function PluginSearchScreen() {
               ))}
             </View>
           }
-          renderItem={({ item }) => (
-            <CandidateRow
-              candidate={item}
-              added={added.has(candidateKey(item))}
-              onAdd={() => void add(item)}
-            />
-          )}
+          renderItem={({ item }) => {
+            // 三种行按 item 的来路区分：候选曲目有 sourceId，艺人有 name，其余是条目。
+            // 列表里所有条目都来自同一次搜索、同一种类型，这里只是让类型系统认下来。
+            if ('sourceId' in item) {
+              return (
+                <CandidateRow
+                  candidate={item}
+                  added={added.has(candidateKey(item))}
+                  onAdd={() => void add(item)}
+                />
+              );
+            }
+            if ('name' in item) return <DiscoveryArtistRow artist={item} />;
+            return (
+              <DiscoveryItemRow
+                item={item}
+                kind={results.type === 'album' ? 'album' : 'sheet'}
+                showPlatform
+              />
+            );
+          }}
         />
       )}
     </Screen>
   );
+}
+
+function appendResults(previous: Results | null, outcome: SearchPage): Results {
+  if (!previous || previous.type !== outcome.type)
+    return { type: outcome.type, items: outcome.items };
+  return { type: outcome.type, items: [...previous.items, ...outcome.items] } as Results;
+}
+
+function resultKey(item: Results['items'][number]): string {
+  return 'sourceId' in item ? candidateKey(item) : discoveryKey(item);
 }

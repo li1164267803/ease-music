@@ -16,7 +16,7 @@ import {
   updatePlugin,
 } from '@/plugins/manager';
 import { lyricForTrack, searchLyric } from '@/plugins/lyrics';
-import { searchPlugins } from '@/plugins/search';
+import { searchMusic } from '@/plugins/search';
 
 /**
  * Android 侧的插件门面。
@@ -33,7 +33,7 @@ export const Plugins: PluginsFacade = {
 
   init: initPlugins,
   list: listPlugins,
-  hasSearchable: () => searchablePlugins().length > 0,
+  hasSearchable: () => searchablePlugins('music').length > 0,
   hasLyricPlugins: () => lyricPlugins().length > 0,
 
   installFromFile,
@@ -44,7 +44,7 @@ export const Plugins: PluginsFacade = {
   getUserVariables,
   saveUserVariables,
 
-  search: searchPlugins,
+  search: searchMusic,
 
   lyricForTrack,
   searchLyric,

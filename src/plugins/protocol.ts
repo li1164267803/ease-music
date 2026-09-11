@@ -21,6 +21,17 @@ export type PluginCacheControl = 'cache' | 'no-cache' | 'no-store';
 
 export type PluginSearchType = 'music' | 'album' | 'artist' | 'sheet' | 'lyric';
 
+/** 面向用户的搜索类型：结果是可浏览的内容。`lyric` 不在其中，它只服务歌词区。 */
+export type ContentSearchType = Exclude<PluginSearchType, 'lyric'>;
+
+/** 协议规定未声明 `supportedSearchType` 时视为支持全部内容类型。 */
+export const CONTENT_SEARCH_TYPES: readonly ContentSearchType[] = [
+  'music',
+  'album',
+  'artist',
+  'sheet',
+];
+
 export type PluginQuality = 'low' | 'standard' | 'high' | 'super';
 
 /** 插件声明的、需要用户自行填写的变量（账号 cookie、访问令牌等）。 */
@@ -92,17 +103,17 @@ export type PluginMeta = {
   userVariables: PluginUserVariable[];
   supportedSearchType: PluginSearchType[] | null;
   /**
-   * 是否可用于**音乐**搜索：既实现了 `search`，又声明支持 `music` 类型。
+   * 可用的搜索类型：既实现了 `search`，又声明支持的内容类型
+   * （add-plugin-discovery-albums-artists/design.md 决策 1）。
    *
-   * 两个条件缺一不可。只看有没有 `search` 方法是不够的——歌词类插件同样实现了它，
-   * 但只认 `lyric` 类型，拿 `music` 去调它只会拿回一堆不成形状的数据，然后界面
-   * 报一个「插件出错了」。而 plugin-source spec 要的是这类插件**不出现在搜索来源中、
-   * 界面不提示错误**。
+   * 只看有没有 `search` 方法是不够的——歌词类插件同样实现了它，但只认 `lyric` 类型，
+   * 拿 `music` 去调它只会拿回一堆不成形状的数据，然后界面报一个「插件出错了」。
+   * 而 plugin-source spec 要的是这类插件**不出现在搜索来源中、界面不提示错误**。
    *
-   * 未声明 `supportedSearchType` 时按协议缺省视为支持——不能因为插件省了一个可选
-   * 字段就把它挡在门外。
+   * 未声明 `supportedSearchType` 时按协议缺省视为支持全部内容类型——不能因为插件省了
+   * 一个可选字段就把它挡在门外。`lyric` 要求显式声明，见 `manager.lyricPlugins`。
    */
-  canSearchMusic: boolean;
+  searchTypes: ContentSearchType[];
   /** 是否实现了取播放地址。未实现的插件其曲目无法播放。 */
   canResolveMedia: boolean;
   /**
@@ -113,6 +124,9 @@ export type PluginMeta = {
    */
   canBrowseTopLists: boolean;
   canBrowseSheets: boolean;
+  /** 是否实现了 `getAlbumInfo` / `getArtistWorks`。判定方式同上。 */
+  canBrowseAlbum: boolean;
+  canBrowseArtistWorks: boolean;
 };
 
 /** 插件的默认主键。协议规定缺省为 `['id']`。 */

@@ -7,7 +7,7 @@ import { PluginCallError, invokePlugin } from '@/plugins/host/invoke';
 import type { LoadedPlugin } from '@/plugins/host/loader';
 import { getLoadedPlugin, lyricPlugins } from '@/plugins/manager';
 import type { PluginMediaItem } from '@/plugins/protocol';
-import { parsePage } from '@/plugins/search';
+import { parsePage } from '@/plugins/host/pages';
 
 /**
  * 插件歌词的两条通路（add-lyrics-display/design.md 决策 2）。

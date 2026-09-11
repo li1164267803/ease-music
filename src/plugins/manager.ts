@@ -6,6 +6,7 @@ import { File } from 'expo-file-system';
 import type { CompatVerdict, InstallOutcome, PluginSummary } from '@/plugins/api';
 import { checkAppVersion, compareVersions } from '@/plugins/host/compat';
 import { PluginLoadError, loadPlugin, type LoadedPlugin } from '@/plugins/host/loader';
+import type { ContentSearchType } from '@/plugins/protocol';
 import { createPluginSource } from '@/plugins/source';
 import {
   deletePluginCode,
@@ -59,7 +60,7 @@ function toSummary(entry: PluginEntry): PluginSummary {
     srcUrl: meta?.srcUrl ?? entry.record.srcUrl,
     cacheControl: meta?.cacheControl ?? null,
     userVariables: meta?.userVariables ?? [],
-    canSearchMusic: meta?.canSearchMusic ?? false,
+    searchTypes: meta?.searchTypes ?? [],
     canResolveMedia: meta?.canResolveMedia ?? false,
     declaredSearchTypes: meta?.supportedSearchType ?? null,
     compat: entry.compat,
@@ -68,15 +69,17 @@ function toSummary(entry: PluginEntry): PluginSummary {
 }
 
 /**
- * 可用于**音乐**搜索的插件。
+ * 可用于某种类型搜索的插件。
  *
- * 判据是 `canSearchMusic` 而不是「有没有 search 方法」——理由见 `protocol.ts` 中该字段
+ * 判据是 `searchTypes` 而不是「有没有 search 方法」——理由见 `protocol.ts` 中该字段
  * 的说明：歌词类插件同样实现了 search，把它算进来只会让用户看到一条它本来就做不到的失败。
  */
-export function searchablePlugins(): LoadedPlugin[] {
+export function searchablePlugins(type: ContentSearchType): LoadedPlugin[] {
   return [...ENTRIES.values()]
     .map((entry) => entry.loaded)
-    .filter((loaded): loaded is LoadedPlugin => loaded !== null && loaded.meta.canSearchMusic);
+    .filter(
+      (loaded): loaded is LoadedPlugin => loaded !== null && loaded.meta.searchTypes.includes(type),
+    );
 }
 
 /**
@@ -100,7 +103,7 @@ export function getLoadedPlugin(platform: string): LoadedPlugin | null {
 /**
  * **歌词类**插件：自述支持 `lyric` 检索的插件（add-lyrics-display/design.md 决策 2）。
  *
- * 与 `canSearchMusic` 的缺省规则相反，这里要求**显式声明**：未声明 `supportedSearchType`
+ * 与 `searchTypes` 的缺省规则相反，这里要求**显式声明**：未声明 `supportedSearchType`
  * 的插件按协议视为音乐插件，拿标题去向它做 `lyric` 检索只会拿回一页曲目条目——
  * 形状合法、内容全错，用户看到的是别的歌的词。
  */

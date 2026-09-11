@@ -48,8 +48,9 @@ const PLUGIN_IMPLEMENTATION = [
   'src/plugins/screens/manage.android.tsx',
   'src/plugins/screens/search.android.tsx',
   'src/plugins/screens/discovery.android.tsx',
-  'src/plugins/screens/discovery-sheets.android.tsx',
+  'src/plugins/screens/discovery-items.android.tsx',
   'src/plugins/screens/discovery-tracks.android.tsx',
+  'src/plugins/screens/discovery-artist.android.tsx',
 ];
 
 rmSync(OUTPUT_DIR, { recursive: true, force: true });

@@ -2,7 +2,9 @@
 // Copyright (C) 2026 li1164267803 · 自在音乐 EaseMusic
 
 import {
+  CONTENT_SEARCH_TYPES,
   DEFAULT_PRIMARY_KEY,
+  type ContentSearchType,
   type PluginCacheControl,
   type PluginInstance,
   type PluginMeta,
@@ -108,12 +110,12 @@ function readMeta(instance: PluginInstance): PluginMeta {
     cacheControl: readCacheControl(instance.cacheControl),
     userVariables: readUserVariables(instance.userVariables),
     supportedSearchType,
-    canSearchMusic:
-      typeof instance.search === 'function' &&
-      (supportedSearchType === null || supportedSearchType.includes('music')),
+    searchTypes: typeof instance.search === 'function' ? readContentTypes(supportedSearchType) : [],
     canResolveMedia: typeof instance.getMediaSource === 'function',
     canBrowseTopLists: typeof instance.getTopLists === 'function',
     canBrowseSheets: typeof instance.getRecommendSheetTags === 'function',
+    canBrowseAlbum: typeof instance.getAlbumInfo === 'function',
+    canBrowseArtistWorks: typeof instance.getArtistWorks === 'function',
   };
 }
 
@@ -140,6 +142,12 @@ function readSearchTypes(value: unknown): PluginSearchType[] | null {
     SEARCH_TYPES.includes(item as PluginSearchType),
   );
   return types.length > 0 ? types : null;
+}
+
+/** 声明了就按声明，没声明按协议缺省视为全部支持。 */
+function readContentTypes(declared: PluginSearchType[] | null): ContentSearchType[] {
+  if (declared === null) return [...CONTENT_SEARCH_TYPES];
+  return CONTENT_SEARCH_TYPES.filter((type) => declared.includes(type));
 }
 
 function readUserVariables(value: unknown): PluginUserVariable[] {

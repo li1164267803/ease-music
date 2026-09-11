@@ -227,8 +227,8 @@ function TagGroups({
                 active={false}
                 onPress={() =>
                   router.push({
-                    pathname: '/plugin-discovery/sheets',
-                    params: { platform, tag: JSON.stringify(tag) },
+                    pathname: '/plugin-discovery/items',
+                    params: { platform, kind: 'sheet-tag', source: JSON.stringify(tag) },
                   })
                 }
               />
