@@ -2,8 +2,14 @@
 // Copyright (C) 2026 li1164267803 · 自在音乐 EaseMusic
 
 import { toNewTrack, type CandidateTrack } from '@/domain/model/candidate-track';
+import { normalizePlaylistName, type Playlist } from '@/domain/model/playlist';
 import { SOURCE_LOCAL_FILE, SOURCE_REMOTE_URL, type Track } from '@/domain/model/track';
-import { addTrack, findBySourceKey } from '@/domain/repository/track-repository';
+import {
+  addTracksToPlaylist,
+  createPlaylist,
+  getPlaylist,
+} from '@/domain/repository/playlist-repository';
+import { addTrack, addTracks, findBySourceKey } from '@/domain/repository/track-repository';
 import { cacheArtwork } from '@/library/artwork';
 import { parseAudioMetadata, titleFromFileName } from '@/library/metadata';
 import {
@@ -133,4 +139,50 @@ export async function addCandidateTrack(
 ): Promise<{ track: Track; duplicate: boolean }> {
   const { track, created } = await addTrack(toNewTrack(candidate));
   return { track, duplicate: !created };
+}
+
+/** 批量入库的去处：新建歌单，或追加到既有歌单。 */
+export type ImportTarget = { kind: 'new'; name: string } | { kind: 'existing'; playlistId: string };
+
+export type ImportCandidatesResult =
+  | {
+      ok: true;
+      playlist: Playlist;
+      /** 本次新增入库的数量 */
+      added: number;
+      /** 原已在曲库中、本次未重复入库的数量 */
+      duplicates: number;
+      /** 实际进入歌单的数量：既有歌单里已有的曲目不重复加入 */
+      addedToPlaylist: number;
+    }
+  | { ok: false; reason: string };
+
+/**
+ * 候选曲目批量入库并放进歌单（add-plugin-discovery-import/design.md 决策 3）。
+ *
+ * 顺序：先校验目标，再入库，最后建歌单与关联。目标不成立时什么都不发生
+ * （plugin-discovery spec「空歌单名」）；入库在一个事务里，失败整批回滚。
+ * 产物是一个普通歌单：不记录来源，也不依赖任何插件（spec「导入的歌单是普通本地歌单」）。
+ */
+export async function importCandidates(
+  candidates: CandidateTrack[],
+  target: ImportTarget,
+): Promise<ImportCandidatesResult> {
+  const existing = target.kind === 'existing' ? await getPlaylist(target.playlistId) : null;
+  if (target.kind === 'existing' && !existing) return { ok: false, reason: '目标歌单已不存在。' };
+  if (target.kind === 'new' && !normalizePlaylistName(target.name)) {
+    return { ok: false, reason: '歌单名称不能为空。' };
+  }
+
+  const results = await addTracks(candidates.map(toNewTrack));
+  const playlist = target.kind === 'new' ? await createPlaylist(target.name) : existing;
+  // 两个分支都已在上面校验过，这里只是类型收窄
+  if (!playlist) return { ok: false, reason: '目标歌单已不存在。' };
+
+  const addedToPlaylist = await addTracksToPlaylist(
+    playlist.id,
+    results.map((result) => result.track.id),
+  );
+  const added = results.filter((result) => result.created).length;
+  return { ok: true, playlist, added, duplicates: results.length - added, addedToPlaylist };
 }

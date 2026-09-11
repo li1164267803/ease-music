@@ -302,5 +302,7 @@ function describeCapabilities(plugin: PluginSummary): string {
   // 自述支持 lyric 检索的插件会被歌词区用来按标题找词（add-lyrics-display），
   // 对本地文件与远程直链曲目同样有效——这是它在本应用里实际承担的能力。
   if (plugin.declaredSearchTypes?.includes('lyric')) abilities.push('歌词');
+  if (plugin.canImportSheet) abilities.push('导入歌单');
+  if (plugin.canImportItem) abilities.push('导入单曲');
   return abilities.length > 0 ? abilities.join(' · ') : '未提供搜索与播放能力';
 }

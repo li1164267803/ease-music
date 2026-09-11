@@ -144,14 +144,17 @@ UI 层        src/ui, src/app
 2. `pnpm check:constraints` 在引用层面复查核心路径
 3. `pnpm check:ios-strip` 导出真实 iOS 产物，断言模块清单里确实没有它们——**前两条都只看源码，只有这一条能证明裁剪真的生效**
 
-### 候选曲目的两条来路：搜索与发现
+### 候选曲目的来路：搜索、发现与链接导入
 
-插件曲目进入曲库只有一条路径——先以**候选曲目**（`src/domain/model/candidate-track.ts`）呈现，用户逐首「加入曲库」后才成为曲目记录，入库后与本地文件曲目同权。候选曲目有三条来路，共用同一套地基（形状校验在 `host/pages.ts`）：
+插件曲目进入曲库只有一条路径——先以**候选曲目**（`src/domain/model/candidate-track.ts`）呈现，用户逐首「加入曲库」后才成为曲目记录，入库后与本地文件曲目同权。候选曲目有四条来路，共用同一套地基（形状校验在 `host/pages.ts`）：
 
 | 来路                                  | 模块                       | 协议方法                                                                                                                                           | 形状差异                                                                                                                                                                                  |
 | ------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 搜索                                  | `src/plugins/search.ts`    | `search`                                                                                                                                           | 曲目在 `data`；跨插件并发，`continuing` 游标记录哪些插件还有下一页                                                                                                                        |
 | 搜索（专辑 · 艺人 · 歌单）            | `src/plugins/search.ts`    | `search` 的 `album` / `artist` / `sheet` 类型                                                                                                      | 与歌曲搜索共用并发与游标，条目转成发现层的展示对象而不是候选曲目；点开后进入下面的详情方法                                                                                                |
 | 发现（榜单 · 推荐歌单 · 专辑 · 艺人） | `src/plugins/discovery.ts` | `getTopLists` · `getTopListDetail` · `getRecommendSheetTags` · `getRecommendSheetsByTag` · `getMusicSheetInfo` · `getAlbumInfo` · `getArtistWorks` | 曲目在 `musicList`（艺人作品在 `data`）；列表面向单个插件，没有跨插件游标。榜单项、歌单项、专辑项、艺人项、标签是插件的凭据，校验后连同原始条目一起随路由参数传递，下一步调用原样交回插件 |
+| 链接导入（外部歌单 · 单曲）           | `src/plugins/discovery.ts` | `importMusicSheet` · `importMusicItem`                                                                                                             | 用户先选插件再粘贴链接，不跨插件猜测归属。返回曲目数组 / 单个条目；对不属于自己的输入返回假值，这是协议的合法回答（「不识别」），与畸形数据分开归因                                       |
 
-三条来路都经 `host/invoke.ts` 的统一调用通道（未实现 / 抛错 / 超时 / 畸形四类故障的归因）、同一个 `toCandidateTrack`（主键拼接与畸形条目丢弃）、同一个 `CandidateRow`（`src/plugins/ui/candidate-row.tsx`），也都在同一条裁剪线之内：发现层的入口在插件管理页头部，整棵子树只被 Android 侧引用，平台中立门面没有为它增加任何成员。发现能力（`canBrowseTopLists` / `canBrowseSheets`）与搜索能力一样在加载期按方法是否存在判定，未实现的能力在界面上不出现、不报错。
+四条来路都经 `host/invoke.ts` 的统一调用通道（未实现 / 抛错 / 超时 / 畸形四类故障的归因）、同一个 `toCandidateTrack`（主键拼接与畸形条目丢弃）、同一个 `CandidateRow`（`src/plugins/ui/candidate-row.tsx`），也都在同一条裁剪线之内：发现层的入口在插件管理页头部，整棵子树只被 Android 侧引用，平台中立门面没有为它增加任何成员。发现能力（`canBrowseTopLists` / `canBrowseSheets` / `canImportSheet` / `canImportItem`）与搜索能力一样在加载期按方法是否存在判定，未实现的能力在界面上不出现、不报错。
+
+**整个列表批量入库**是候选曲目的第二条入库路径：`collectTracks`（`src/plugins/discovery.ts`，逐页取到 `isEnd`，任一页失败即中止不入库）取完整个列表后交给 `importCandidates`（`src/library/import.ts`）——一次事务内批量去重入库（`addTracks`），再新建或追加到既有歌单。后两者在核心层，不引用插件模块。**导入是快照**：产物是普通本地歌单，不记录来源、不跟随外部更新、不依赖插件存在；「更新」就是再导一次——曲库去重加歌单关联的 `INSERT OR IGNORE`，零新增状态就得到手动同步。订阅型歌单被明确排除，理由见 `changes/archive/*-add-plugin-discovery-import/design.md` 决策 1。

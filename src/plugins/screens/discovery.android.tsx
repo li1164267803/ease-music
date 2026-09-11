@@ -13,12 +13,13 @@ import {
   type DiscoveryTag,
 } from '@/plugins/discovery';
 import type { LoadedPlugin } from '@/plugins/host/loader';
-import { discoveryPlugins } from '@/plugins/manager';
+import { discoveryPlugins, importingPlugins } from '@/plugins/manager';
 import { ScreenHeader } from '@/plugins/ui/screen-header';
 import { Chip } from '@/ui/chip';
 import { MediaCard } from '@/ui/media-card';
 import { Screen } from '@/ui/screen';
 import { SectionHead } from '@/ui/section-head';
+import { SheetAction } from '@/ui/sheet';
 import { AppText } from '@/ui/text';
 import { Colors, SCREEN_PADDING } from '@/ui/theme';
 import { useMiniDockInset } from '@/ui/mini-player';
@@ -32,15 +33,17 @@ import { useMiniDockInset } from '@/ui/mini-player';
  */
 export default function PluginDiscoveryScreen() {
   const dockInset = useMiniDockInset();
+  const router = useRouter();
   const plugins = discoveryPlugins();
+  const canImport = importingPlugins().length > 0;
 
   return (
     <Screen>
       <ScreenHeader title="插件发现" />
 
-      {plugins.length === 0 ? (
+      {plugins.length === 0 && !canImport ? (
         <AppText size={12} color={Colors.textMuted} lineHeight={19}>
-          当前没有可用于浏览的插件。已安装的插件中没有提供榜单或推荐歌单能力的，或者你还没有安装任何插件。
+          当前没有可用于浏览的插件。已安装的插件中没有提供榜单、推荐歌单或链接导入能力的，或者你还没有安装任何插件。
         </AppText>
       ) : (
         <ScrollView
@@ -48,6 +51,13 @@ export default function PluginDiscoveryScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ gap: 22, paddingBottom: dockInset }}
         >
+          {canImport ? (
+            <SheetAction
+              label="导入外部歌单或单曲"
+              hint="粘贴其他平台的分享链接，由插件解析"
+              onPress={() => router.push('/plugin-discovery/import')}
+            />
+          ) : null}
           {plugins.map((plugin) => (
             <PluginSection key={plugin.meta.platform} plugin={plugin} />
           ))}

@@ -10,7 +10,8 @@ import type { PluginMediaItem, PluginMeta } from '@/plugins/protocol';
 
 /**
  * 发现层：榜单、推荐歌单、专辑、艺人（add-plugin-discovery-charts/design.md 决策 5，
- * add-plugin-discovery-albums-artists/design.md 决策 4–6）。
+ * add-plugin-discovery-albums-artists/design.md 决策 4–6），以及取完整个列表与链接导入
+ * （add-plugin-discovery-import/design.md 决策 2、6）。
  *
  * 每个协议方法一对 `call` / `parse`，全部经 `invokePlugin` 走同一条调用通道；本文件
  * 不做任何 try/catch 之外的兜底——未实现、抛错、超时、畸形四类故障都由通道归因为
@@ -158,12 +159,90 @@ export async function fetchTrackPage(
           parse: parseTrackPage,
         });
 
+  return { items: toCandidates(meta, result.items), isEnd: result.isEnd };
+}
+
+/**
+ * 取完整个列表的页数上限（add-plugin-discovery-import/design.md 决策 2）。
+ * 只防「插件永远回 isEnd: false」这一种情况；触顶时把已取部分交出去并标明被截断。
+ */
+export const MAX_PAGES = 100;
+
+export type CollectedTracks = { items: CandidateTrack[]; truncated: boolean };
+
+/**
+ * 逐页取到 `isEnd`，供「全部加入歌单」使用。任一页失败即中止并抛出——半个列表悄悄入库
+ * 比报错重试更糟（plugin-discovery spec「取页中途失败」）；错误文案里带上页码，用户才知道
+ * 是取到哪一步出的问题。
+ */
+export async function collectTracks(
+  plugin: LoadedPlugin,
+  kind: TrackListKind,
+  item: Credential,
+  onProgress?: (page: number) => void,
+): Promise<CollectedTracks> {
+  const items: CandidateTrack[] = [];
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
+    onProgress?.(page);
+    let result: DiscoveryPage<CandidateTrack>;
+    try {
+      result = await fetchTrackPage(plugin, kind, item, page);
+    } catch (error) {
+      throw new Error(`取第 ${page} 页时失败：${describe(error)}`, { cause: error });
+    }
+    items.push(...result.items);
+    if (result.isEnd) return { items, truncated: false };
+  }
+  return { items, truncated: true };
+}
+
+/**
+ * 链接导入的结果。「不识别」是协议的合法回答（插件对不属于自己的输入返回假值），
+ * 与畸形数据分开归因（add-plugin-discovery-import/design.md 决策 6）。
+ */
+export type ImportOutcome = { recognized: false } | { recognized: true; items: CandidateTrack[] };
+
+/** 导入外部歌单链接：插件返回曲目数组，畸形条目丢弃、其余保留。 */
+export function importSheet(plugin: LoadedPlugin, urlLike: string): Promise<ImportOutcome> {
+  const { meta, instance } = plugin;
+  return invokePlugin({
+    platform: meta.platform,
+    method: 'importMusicSheet',
+    call: instance.importMusicSheet && (() => instance.importMusicSheet?.(urlLike)),
+    parse: (raw) => {
+      if (!raw) return { recognized: false };
+      return Array.isArray(raw) ? { recognized: true, items: toCandidates(meta, raw) } : null;
+    },
+  });
+}
+
+/** 导入单曲链接：插件返回一个曲目条目。条目拼不出主键或没有标题时按畸形处理。 */
+export function importItem(plugin: LoadedPlugin, urlLike: string): Promise<ImportOutcome> {
+  const { meta, instance } = plugin;
+  return invokePlugin({
+    platform: meta.platform,
+    method: 'importMusicItem',
+    call: instance.importMusicItem && (() => instance.importMusicItem?.(urlLike)),
+    parse: (raw) => {
+      if (!raw) return { recognized: false };
+      const candidate = toCandidateTrack(meta, raw);
+      return candidate ? { recognized: true, items: [candidate] } : null;
+    },
+  });
+}
+
+/** 畸形条目丢弃、其余继续（plugin-source spec）。 */
+function toCandidates(meta: PluginMeta, raw: unknown[]): CandidateTrack[] {
   const candidates: CandidateTrack[] = [];
-  for (const entry of result.items) {
+  for (const entry of raw) {
     const candidate = toCandidateTrack(meta, entry);
     if (candidate) candidates.push(candidate);
   }
-  return { items: candidates, isEnd: result.isEnd };
+  return candidates;
+}
+
+function describe(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function parseGroups<T>(

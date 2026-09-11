@@ -2,6 +2,7 @@
 // Copyright (C) 2026 li1164267803 · 自在音乐 EaseMusic
 
 import { randomUUID } from 'expo-crypto';
+import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { getDatabase } from '@/domain/db';
 import type { NewTrack, SourceId, Track, TrackSortKey } from '@/domain/model/track';
@@ -109,13 +110,44 @@ export async function findBySourceKey(
   return row ? toTrack(row) : null;
 }
 
+export type AddTrackResult = { track: Track; created: boolean };
+
 /**
- * 加入曲库。若同一来源下已存在同一标识的曲目则不新建，直接返回既有记录——
- * music-library spec 要求重复添加不产生重复记录。
+ * 批量加入曲库，一个排他事务内逐条去重插入，返回与输入等长、保持顺序的结果
+ * （add-plugin-discovery-import/design.md 决策 3）。
+ *
+ * 去重规则不变：同一来源下已存在同一标识的曲目不新建，直接返回既有记录——
+ * music-library spec 要求重复添加不产生重复记录。同一批里出现两次的曲目，第二次
+ * 会查到第一次刚插入的那条，同样不重复。
+ *
+ * 事务不只是快（自动提交模式下几百条各落一次盘是秒级，事务内是毫秒级）：
+ * 中途失败整批回滚，不会留下半个列表。
  */
-export async function addTrack(input: NewTrack): Promise<{ track: Track; created: boolean }> {
-  const existing = await findBySourceKey(input.sourceId, input.sourceKey);
-  if (existing) return { track: existing, created: false };
+export async function addTracks(inputs: NewTrack[]): Promise<AddTrackResult[]> {
+  if (inputs.length === 0) return [];
+
+  const db = await getDatabase();
+  const results: AddTrackResult[] = [];
+  await db.withExclusiveTransactionAsync(async (txn) => {
+    for (const input of inputs) results.push(await insertUnlessExisting(txn, input));
+  });
+  return results;
+}
+
+/** 加入单首曲目。一查一插两条语句，不需要事务；去重与记录形态与批量完全相同。 */
+export async function addTrack(input: NewTrack): Promise<AddTrackResult> {
+  return insertUnlessExisting(await getDatabase(), input);
+}
+
+/** 事务内外都能用的执行器：数据库对象与事务对象都满足。 */
+type Executor = Pick<SQLiteDatabase, 'getFirstAsync' | 'runAsync'>;
+
+async function insertUnlessExisting(executor: Executor, input: NewTrack): Promise<AddTrackResult> {
+  const existing = await executor.getFirstAsync<TrackRow>(
+    `SELECT ${COLUMNS} FROM tracks WHERE source_id = ? AND source_key = ?`,
+    [input.sourceId, input.sourceKey],
+  );
+  if (existing) return { track: toTrack(existing), created: false };
 
   const track: Track = {
     ...input,
@@ -123,22 +155,23 @@ export async function addTrack(input: NewTrack): Promise<{ track: Track; created
     addedAt: Date.now(),
     unavailable: false,
   };
-
-  const db = await getDatabase();
-  await db.runAsync(`INSERT INTO tracks (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-    track.id,
-    track.sourceId,
-    track.sourceKey,
-    JSON.stringify(track.sourceRef),
-    track.title,
-    track.artist,
-    track.album,
-    track.durationMs,
-    track.trackNumber,
-    track.artworkUri,
-    track.addedAt,
-    0,
-  ]);
+  await executor.runAsync(
+    `INSERT INTO tracks (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      track.id,
+      track.sourceId,
+      track.sourceKey,
+      JSON.stringify(track.sourceRef),
+      track.title,
+      track.artist,
+      track.album,
+      track.durationMs,
+      track.trackNumber,
+      track.artworkUri,
+      track.addedAt,
+      0,
+    ],
+  );
   return { track, created: true };
 }
 

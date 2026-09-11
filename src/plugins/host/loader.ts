@@ -116,7 +116,20 @@ function readMeta(instance: PluginInstance): PluginMeta {
     canBrowseSheets: typeof instance.getRecommendSheetTags === 'function',
     canBrowseAlbum: typeof instance.getAlbumInfo === 'function',
     canBrowseArtistWorks: typeof instance.getArtistWorks === 'function',
+    canImportSheet: typeof instance.importMusicSheet === 'function',
+    canImportItem: typeof instance.importMusicItem === 'function',
+    importHints: readImportHints(instance.hints),
   };
+}
+
+function readImportHints(value: unknown): PluginMeta['importHints'] {
+  const hints = isRecord(value) ? value : {};
+  return { sheet: readStrings(hints.importMusicSheet), item: readStrings(hints.importMusicItem) };
+}
+
+function readStrings(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
 }
 
 function readPrimaryKey(value: unknown): string[] {

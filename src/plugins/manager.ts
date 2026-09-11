@@ -62,6 +62,8 @@ function toSummary(entry: PluginEntry): PluginSummary {
     userVariables: meta?.userVariables ?? [],
     searchTypes: meta?.searchTypes ?? [],
     canResolveMedia: meta?.canResolveMedia ?? false,
+    canImportSheet: meta?.canImportSheet ?? false,
+    canImportItem: meta?.canImportItem ?? false,
     declaredSearchTypes: meta?.supportedSearchType ?? null,
     compat: entry.compat,
     loadError: entry.loadError,
@@ -92,6 +94,16 @@ export function discoveryPlugins(): LoadedPlugin[] {
     .filter(
       (loaded): loaded is LoadedPlugin =>
         loaded !== null && (loaded.meta.canBrowseTopLists || loaded.meta.canBrowseSheets),
+    );
+}
+
+/** 具备任一导入能力（歌单链接或单曲链接）的插件。导入页的可选插件只列这些。 */
+export function importingPlugins(): LoadedPlugin[] {
+  return [...ENTRIES.values()]
+    .map((entry) => entry.loaded)
+    .filter(
+      (loaded): loaded is LoadedPlugin =>
+        loaded !== null && (loaded.meta.canImportSheet || loaded.meta.canImportItem),
     );
 }
 

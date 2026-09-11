@@ -127,6 +127,15 @@ export type PluginMeta = {
   /** 是否实现了 `getAlbumInfo` / `getArtistWorks`。判定方式同上。 */
   canBrowseAlbum: boolean;
   canBrowseArtistWorks: boolean;
+  /** 是否实现了 `importMusicSheet` / `importMusicItem`。判定方式同上。 */
+  canImportSheet: boolean;
+  canImportItem: boolean;
+  /**
+   * 插件自述的粘贴说明（协议的 `hints.importMusicSheet` / `hints.importMusicItem`），
+   * 只收字符串元素。链接格式完全由插件决定，这是用户唯一能看到的「该粘什么」
+   * （add-plugin-discovery-import/design.md 决策 7）。
+   */
+  importHints: { sheet: string[]; item: string[] };
 };
 
 /** 插件的默认主键。协议规定缺省为 `['id']`。 */

@@ -10,6 +10,7 @@ import { candidateKey, type CandidateTrack } from '@/domain/model/candidate-trac
 import { addCandidateTrack } from '@/library/import';
 import { notifyLibraryChanged } from '@/library/store';
 import {
+  collectTracks,
   fetchTrackPage,
   type DiscoveryArtist,
   type DiscoveryItem,
@@ -18,9 +19,11 @@ import {
 import type { LoadedPlugin } from '@/plugins/host/loader';
 import { getLoadedPlugin } from '@/plugins/manager';
 import { CandidateRow } from '@/plugins/ui/candidate-row';
+import { ImportToPlaylistSheet, type CandidateLoader } from '@/plugins/ui/import-to-playlist-sheet';
 import { ScreenHeader } from '@/plugins/ui/screen-header';
 import { usePagedList } from '@/plugins/ui/use-paged-list';
 import { Screen } from '@/ui/screen';
+import { SheetAction } from '@/ui/sheet';
 import { AppText } from '@/ui/text';
 import { Colors } from '@/ui/theme';
 import { useMiniDockInset } from '@/ui/mini-player';
@@ -30,7 +33,8 @@ import { useMiniDockInset } from '@/ui/mini-player';
  * 参数：`platform`、`kind`（决定调用哪个协议方法）、JSON 序列化的条目或艺人项（决策 4）。
  *
  * 曲目是**尚未加入曲库的候选曲目**：不加入就不会碰曲库；加入后与本地文件曲目同权，
- * 逐首加入的做法与插件搜索页相同。
+ * 逐首加入的做法与插件搜索页相同。整个列表加入歌单时先取完全部页再入库
+ * （add-plugin-discovery-import/design.md 决策 2）。
  */
 export default function PluginDiscoveryTracksScreen() {
   const {
@@ -48,7 +52,7 @@ export default function PluginDiscoveryTracksScreen() {
     <Screen>
       <ScreenHeader title={title} subtitle={platform} />
       {plugin ? (
-        <TrackList plugin={plugin} kind={kind} item={item} />
+        <TrackList plugin={plugin} kind={kind} item={item} title={title} />
       ) : (
         <AppText size={12} color={Colors.textMuted} lineHeight={19}>
           插件「{platform}」当前不可用。
@@ -62,10 +66,13 @@ function TrackList({
   plugin,
   kind,
   item,
+  title,
 }: {
   plugin: LoadedPlugin;
   kind: TrackListKind;
   item: DiscoveryItem | DiscoveryArtist;
+  /** 新建歌单的默认名 */
+  title: string;
 }) {
   const dockInset = useMiniDockInset();
   const load = useCallback(
@@ -73,9 +80,14 @@ function TrackList({
     [plugin, kind, item],
   );
   const { items, busy, failure, loadMore } = usePagedList(load);
+  const collect = useCallback<CandidateLoader>(
+    (onProgress) => collectTracks(plugin, kind, item, onProgress),
+    [plugin, kind, item],
+  );
 
   const [added, setAdded] = useState<ReadonlySet<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const add = async (candidate: CandidateTrack) => {
     const { duplicate } = await addCandidateTrack(candidate);
@@ -87,6 +99,17 @@ function TrackList({
 
   return (
     <>
+      <SheetAction
+        label="全部加入歌单"
+        hint="先取完整个列表，再一并入库并放进歌单"
+        onPress={() => setImporting(true)}
+      />
+      <ImportToPlaylistSheet
+        visible={importing}
+        load={collect}
+        defaultName={title}
+        onClose={() => setImporting(false)}
+      />
       {/* 提示放在列表上方而不是尾部：长列表的尾部在屏幕之外，放那里等于没提示 */}
       {notice ? (
         <AppText size={12} color={Colors.textMuted} lineHeight={19}>

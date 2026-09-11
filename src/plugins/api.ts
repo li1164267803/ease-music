@@ -30,6 +30,9 @@ export type PluginSummary = {
   /** 可用的搜索类型。歌词类插件虽有 `search` 方法但只认 `lyric`，这里为空。 */
   searchTypes: ContentSearchType[];
   canResolveMedia: boolean;
+  /** 能否导入外部歌单链接 / 单曲链接。管理页据此陈述能力。 */
+  canImportSheet: boolean;
+  canImportItem: boolean;
   /** 插件自述支持的搜索类型。用于如实告诉用户「它能搜，但搜的不是歌」。 */
   declaredSearchTypes: string[] | null;
   compat: CompatVerdict;
