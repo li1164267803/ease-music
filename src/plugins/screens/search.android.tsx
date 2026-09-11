@@ -14,7 +14,7 @@ import { discoveryKey } from '@/plugins/discovery';
 import { searchablePlugins } from '@/plugins/manager';
 import { CONTENT_SEARCH_TYPES, type ContentSearchType } from '@/plugins/protocol';
 import { searchPlugins, type SearchFailure, type SearchPage } from '@/plugins/search';
-import { CandidateRow } from '@/plugins/ui/candidate-row';
+import { CandidateRow } from '@/ui/candidate-row';
 import { DiscoveryArtistRow } from '@/plugins/ui/discovery-artist-row';
 import { DiscoveryItemRow } from '@/plugins/ui/discovery-item-row';
 import { Chip } from '@/ui/chip';

@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 li1164267803 · 自在音乐 EaseMusic
 
-import { toNewTrack, type CandidateTrack } from '@/domain/model/candidate-track';
+import {
+  toNewTrack,
+  type CandidateTrack,
+  type CollectedTracks,
+  type SkippedEntry,
+} from '@/domain/model/candidate-track';
 import { normalizePlaylistName, type Playlist } from '@/domain/model/playlist';
 import { SOURCE_LOCAL_FILE, SOURCE_REMOTE_URL, type Track } from '@/domain/model/track';
 import {
@@ -11,10 +16,12 @@ import {
 } from '@/domain/repository/playlist-repository';
 import { addTrack, addTracks, findBySourceKey } from '@/domain/repository/track-repository';
 import { cacheArtwork } from '@/library/artwork';
+import { decodePlaylistBytes, parsePlaylist, type PlaylistEntry } from '@/library/m3u';
 import { parseAudioMetadata, titleFromFileName } from '@/library/metadata';
 import {
   discardManagedFile,
   pickAudioFiles,
+  pickPlaylistFile,
   persistPickedFile,
   type PickedAudioFile,
 } from '@/sources/local-file';
@@ -185,4 +192,172 @@ export async function importCandidates(
   );
   const added = results.filter((result) => result.created).length;
   return { ok: true, playlist, added, duplicates: results.length - added, addedToPlaylist };
+}
+
+/**
+ * 播放列表取回的体积上限。一个上万条的 m3u 也不到 1 MB，2 MiB 已经足够宽松；
+ * 设这个上限是为了挡住「地址其实指向一个几百兆的文件」这种情形——那会在读进内存
+ * 的一瞬间把应用拖垮，且此时用户根本还没看到任何提示。
+ */
+const MAX_PLAYLIST_BYTES = 2 * 1024 * 1024;
+
+/**
+ * 播放列表解析完、尚未入库的状态。
+ *
+ * 取回与解析在弹层打开**之前**完成：新建歌单的默认名要从播放列表自身得出（任务 3.6），
+ * 而本地文件的名字要等用户选完才知道。
+ */
+export type PreparedPlaylist =
+  | { status: 'ready'; collected: CollectedTracks; defaultName: string }
+  /** 用户在文件选择器里取消了，不是失败，界面不该报错。 */
+  | { status: 'canceled' }
+  | { status: 'failed'; reason: string };
+
+/** 从设备上选一个播放列表文件并解析。 */
+export async function preparePlaylistFromFile(): Promise<PreparedPlaylist> {
+  const picked = await pickPlaylistFile();
+  if (!picked) return { status: 'canceled' };
+
+  if (picked.size !== null && picked.size > MAX_PLAYLIST_BYTES) {
+    return { status: 'failed', reason: describeTooLarge(picked.size) };
+  }
+
+  let bytes: Uint8Array;
+  try {
+    bytes = await picked.read();
+  } catch (error) {
+    return { status: 'failed', reason: `读取文件失败：${describeError(error)}` };
+  }
+  if (bytes.byteLength > MAX_PLAYLIST_BYTES) {
+    return { status: 'failed', reason: describeTooLarge(bytes.byteLength) };
+  }
+
+  // 以文件自身的位置为基准：本地播放列表里的相对路径会因此解析成 file:// 或
+  // content:// 地址，被解析器判为不可用条目并说明应改走本地文件导入（design 决策 3）。
+  return finishPlaylist(bytes, safeBaseUrl(picked.uri), titleFromFileName(picked.fileName));
+}
+
+/** 取回一个远程播放列表并解析。 */
+export async function preparePlaylistFromUrl(input: string): Promise<PreparedPlaylist> {
+  const parsed = parseRemoteUrl(input);
+  if (!parsed) {
+    // 与单条地址导入同一条规则：非法输入在发起请求前就被拒绝。
+    return { status: 'failed', reason: '请输入以 http:// 或 https:// 开头的播放列表地址。' };
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(parsed.url.toString());
+  } catch (error) {
+    return { status: 'failed', reason: `取回失败：${describeError(error)}` };
+  }
+  if (!response.ok) {
+    return { status: 'failed', reason: `取回失败：服务器返回 HTTP ${response.status}。` };
+  }
+
+  // 先看声明的长度：能在下载之前就拒掉的，不必先读进内存再后悔。
+  const declared = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > MAX_PLAYLIST_BYTES) {
+    return { status: 'failed', reason: describeTooLarge(declared) };
+  }
+
+  let bytes: Uint8Array;
+  try {
+    bytes = new Uint8Array(await response.arrayBuffer());
+  } catch (error) {
+    return { status: 'failed', reason: `取回失败：${describeError(error)}` };
+  }
+  // 没有 content-length 的响应只能读完再判。
+  if (bytes.byteLength > MAX_PLAYLIST_BYTES) {
+    return { status: 'failed', reason: describeTooLarge(bytes.byteLength) };
+  }
+
+  // 基准取重定向后的最终地址——相对地址是相对于文件实际所在的位置，不是用户输入的那个。
+  const base = safeBaseUrl(response.url) ?? parsed.url;
+  return finishPlaylist(bytes, base, inferTitleFromUrl(parsed.url));
+}
+
+function finishPlaylist(
+  bytes: Uint8Array,
+  base: URL | null,
+  defaultName: string,
+): PreparedPlaylist {
+  const parsed = parsePlaylist(decodePlaylistBytes(bytes), base);
+  if (parsed.kind === 'hls') {
+    // 文案必须说清是「流媒体播放列表」而不是笼统的「格式不支持」：`.m3u8` 承载两种
+    // 语义完全不同的东西，用户否则无从知道自己的文件到底哪里不对（design Risks）。
+    return {
+      status: 'failed',
+      reason:
+        '这是一个流媒体播放列表（HLS），里面是同一条直播流的分片而不是一首首曲目，暂不支持导入。',
+    };
+  }
+
+  if (parsed.entries.length === 0) {
+    // 零条目不进入入库流程，也不创建空歌单（spec「全部条目不可用」）。
+    return {
+      status: 'failed',
+      reason:
+        parsed.skipped.length === 0
+          ? '这个文件里没有可识别的条目，不是可用的播放列表。'
+          : `这个播放列表里的 ${parsed.skipped.length} 个条目都无法入库：${summarizeSkipped(parsed.skipped)}。`,
+    };
+  }
+
+  return {
+    status: 'ready',
+    defaultName,
+    collected: {
+      items: parsed.entries.map(toPlaylistCandidate),
+      // 播放列表是一次读完的，不存在取页触顶。
+      truncated: false,
+      skipped: parsed.skipped.length > 0 ? parsed.skipped : undefined,
+    },
+  };
+}
+
+/**
+ * 播放列表条目 → 候选曲目。
+ *
+ * `sourceId` 是既有的远程 URL 来源而非一个新来源（design 决策 1）：解析方式与用户
+ * 手输一条地址逐字相同，而去重键是 `sourceId + sourceKey`——另起一个来源会让同一个
+ * 地址经两条路进来被判成两首歌。
+ */
+function toPlaylistCandidate(entry: PlaylistEntry): CandidateTrack {
+  return {
+    sourceId: SOURCE_REMOTE_URL,
+    sourceKey: entry.url.toString(),
+    sourceRef: buildRemoteSourceRef(entry.url),
+    title: entry.title,
+    artist: entry.artist,
+    // 播放列表文件只自述艺人、标题与时长，其余一律留空，不去猜。
+    album: null,
+    durationMs: entry.durationMs,
+    trackNumber: null,
+    artworkUri: null,
+  };
+}
+
+/** 把跳过项按原因归并，供界面用一句话说清「为什么没进来」。 */
+export function summarizeSkipped(skipped: SkippedEntry[]): string {
+  const counts = new Map<string, number>();
+  for (const entry of skipped) counts.set(entry.reason, (counts.get(entry.reason) ?? 0) + 1);
+  return [...counts].map(([reason, count]) => `${count} 条${reason}`).join('，');
+}
+
+function safeBaseUrl(uri: string): URL | null {
+  try {
+    return new URL(uri);
+  } catch {
+    // 基准解析不出来不是致命错误：绝对地址照常入库，相对地址落入不可用条目。
+    return null;
+  }
+}
+
+function describeTooLarge(bytes: number): string {
+  return `这个播放列表有 ${Math.round(bytes / 1024)} KB，超过了 ${MAX_PLAYLIST_BYTES / 1024 / 1024} MB 的上限，没有读取。`;
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : '未知错误';
 }

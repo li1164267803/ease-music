@@ -5,9 +5,14 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, TextInput, View } from 'react-native';
 
-import { importCandidates, type ImportCandidatesResult, type ImportTarget } from '@/library/import';
+import type { CollectedTracks } from '@/domain/model/candidate-track';
+import {
+  importCandidates,
+  summarizeSkipped,
+  type ImportCandidatesResult,
+  type ImportTarget,
+} from '@/library/import';
 import { notifyLibraryChanged, usePlaylists } from '@/library/store';
-import type { CollectedTracks } from '@/plugins/discovery';
 import { Sheet, SheetAction } from '@/ui/sheet';
 import { AppText } from '@/ui/text';
 import { Colors, Font } from '@/ui/theme';
@@ -26,7 +31,10 @@ type ImportToPlaylistSheetProps = {
 /**
  * 「全部加入歌单」的目标弹层（add-plugin-discovery-import/design.md 决策 4）：
  * 取曲目 → 选目标（新建或既有歌单）→ 入库 → 结果，三段状态都在弹层内部。
- * 候选曲目页与链接导入页共用，两者只是 `load` 不同。
+ *
+ * 消费的是 domain 层的候选曲目与曲库层的批量入库，本来就不认识插件，因此放在公共层：
+ * 插件的候选曲目页、链接导入页，以及播放列表导入共用，三者只是 `load` 不同
+ * （add-m3u-import/design.md 决策 6）。
  */
 export function ImportToPlaylistSheet({
   visible,
@@ -112,6 +120,14 @@ function ImportFlow({ load, defaultName, onClose }: Omit<ImportToPlaylistSheetPr
             共 {phase.collected.items.length} 首
             {phase.collected.truncated ? '（列表过长，只取了这些）' : ''}
           </AppText>
+          {/* 跳过项与 truncated 是同一类信息——都在说「有一部分没能进来」——
+              放在同一屏用户才看得清要入库多少、没能入库多少（add-m3u-import/design.md 决策 7） */}
+          {phase.collected.skipped ? (
+            <AppText size={12} color={Colors.danger} lineHeight={19}>
+              另有 {phase.collected.skipped.length} 条无法入库：
+              {summarizeSkipped(phase.collected.skipped)}。
+            </AppText>
+          ) : null}
 
           <View style={{ gap: 8 }}>
             <TextInput
@@ -227,6 +243,9 @@ function Outcome({
   const skipped = collected.items.length - result.addedToPlaylist;
   if (skipped > 0) parts.push(`${skipped} 首本就在该歌单中`);
   if (collected.truncated) parts.push(`列表过长，只导入了前 ${collected.items.length} 首`);
+  if (collected.skipped) {
+    parts.push(`${collected.skipped.length} 条无法入库（${summarizeSkipped(collected.skipped)}）`);
+  }
 
   return (
     <>

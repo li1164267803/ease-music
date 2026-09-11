@@ -1,11 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 li1164267803 · 自在音乐 EaseMusic
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
 
-import { importLocalFiles, importRemoteUrl } from '@/library/import';
+import type { CollectedTracks } from '@/domain/model/candidate-track';
+import {
+  importLocalFiles,
+  importRemoteUrl,
+  preparePlaylistFromFile,
+  preparePlaylistFromUrl,
+  type PreparedPlaylist,
+} from '@/library/import';
 import { notifyLibraryChanged } from '@/library/store';
+import { ImportToPlaylistSheet, type CandidateLoader } from '@/ui/import-to-playlist-sheet';
 import { Sheet, SheetAction } from '@/ui/sheet';
 import { AppText } from '@/ui/text';
 import { Colors, Font } from '@/ui/theme';
@@ -15,18 +23,59 @@ type ImportSheetProps = {
   onClose: () => void;
 };
 
+/** 解析完成、等待用户选歌单的播放列表。 */
+type ReadyPlaylist = { collected: CollectedTracks; defaultName: string };
+
 export function ImportSheet({ visible, onClose }: ImportSheetProps) {
+  // 「添加一首」与「导入一批」是两件事，各自占满整个弹层而不是挤在一屏里：
+  // 前者要一个地址，后者要一个播放列表，混排只会让两个输入框互相干扰。
+  const [mode, setMode] = useState<'add' | 'playlist'>('add');
+  const [ready, setReady] = useState<ReadyPlaylist | null>(null);
+
+  const close = () => {
+    setMode('add');
+    setReady(null);
+    onClose();
+  };
+
+  // 取回与解析已经在打开这个弹层之前完成，这里只是把现成的列表交出去。
+  // 用 useMemo 固定住函数身份——弹层拿它当 effect 依赖，每次渲染换一个新函数会让它反复重取。
+  const load = useMemo<CandidateLoader | null>(
+    () => (ready ? () => Promise.resolve(ready.collected) : null),
+    [ready],
+  );
+
+  return (
+    <>
+      <Sheet
+        visible={visible && ready === null}
+        title={mode === 'add' ? '添加音乐' : '导入播放列表'}
+        onClose={close}
+      >
+        {mode === 'add' ? (
+          <AddPanel onPlaylist={() => setMode('playlist')} />
+        ) : (
+          <PlaylistPanel onReady={setReady} onBack={() => setMode('add')} />
+        )}
+      </Sheet>
+
+      {ready && load ? (
+        <ImportToPlaylistSheet
+          visible
+          load={load}
+          defaultName={ready.defaultName}
+          onClose={close}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function AddPanel({ onPlaylist }: { onPlaylist: () => void }) {
   const [busy, setBusy] = useState(false);
   const [url, setUrl] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [invalid, setInvalid] = useState(false);
-
-  const close = () => {
-    setUrl('');
-    setMessage(null);
-    setInvalid(false);
-    onClose();
-  };
 
   const pickFiles = async () => {
     setBusy(true);
@@ -61,7 +110,7 @@ export function ImportSheet({ visible, onClose }: ImportSheetProps) {
   };
 
   return (
-    <Sheet visible={visible} title="添加音乐" onClose={close}>
+    <>
       <SheetAction
         label="从设备选择音频文件"
         hint="可多选。原文件留在原处，曲库只记录它的位置。"
@@ -116,13 +165,119 @@ export function ImportSheet({ visible, onClose }: ImportSheetProps) {
         </View>
       </View>
 
+      <SheetAction
+        label="导入播放列表"
+        hint="m3u / m3u8 文件里的地址一次变成一个歌单。"
+        onPress={onPlaylist}
+      />
+
       {busy ? <ActivityIndicator color={Colors.accent} /> : null}
       {message ? (
         <AppText size={12} color={invalid ? Colors.danger : Colors.textMuted}>
           {message}
         </AppText>
       ) : null}
-    </Sheet>
+    </>
+  );
+}
+
+function PlaylistPanel({
+  onReady,
+  onBack,
+}: {
+  onReady: (ready: ReadyPlaylist) => void;
+  onBack: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [url, setUrl] = useState('');
+  const [message, setMessage] = useState<string | null>(null);
+
+  const prepare = async (run: () => Promise<PreparedPlaylist>) => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const prepared = await run();
+      // 取消不是失败，不该在界面上留下一条红字。
+      if (prepared.status === 'canceled') return;
+      if (prepared.status === 'failed') {
+        setMessage(prepared.reason);
+        return;
+      }
+      onReady({ collected: prepared.collected, defaultName: prepared.defaultName });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <AppText size={12} color={Colors.textMuted} lineHeight={19}>
+        导入是一次快照：生成的是一个普通歌单，此后不跟随播放列表文件的变化。
+      </AppText>
+
+      <SheetAction
+        label="从设备选择播放列表文件"
+        hint=".m3u / .m3u8"
+        onPress={() => void prepare(preparePlaylistFromFile)}
+      />
+
+      <View style={{ gap: 8 }}>
+        <AppText size={11} color={Colors.textMuted}>
+          或粘贴一个播放列表地址
+        </AppText>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TextInput
+            value={url}
+            onChangeText={(text) => {
+              setUrl(text);
+              setMessage(null);
+            }}
+            placeholder="https://example.com/list.m3u"
+            placeholderTextColor={Colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            inputMode="url"
+            style={{
+              flex: 1,
+              height: 47,
+              borderRadius: 15,
+              paddingHorizontal: 15,
+              backgroundColor: Colors.surface2,
+              color: Colors.text,
+              fontFamily: Font.regular,
+              fontSize: 13,
+              borderWidth: 1,
+              borderColor: message ? Colors.danger : 'transparent',
+            }}
+          />
+          <Pressable
+            onPress={() => void prepare(() => preparePlaylistFromUrl(url))}
+            disabled={busy || url.trim().length === 0}
+            style={{
+              height: 47,
+              paddingHorizontal: 22,
+              borderRadius: 15,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: url.trim() ? Colors.accent : Colors.surface2,
+            }}
+          >
+            <AppText size={14} weight="semibold" color={url.trim() ? Colors.bg : Colors.textMuted}>
+              导入
+            </AppText>
+          </Pressable>
+        </View>
+      </View>
+
+      {busy ? <ActivityIndicator color={Colors.accent} /> : null}
+      {message ? (
+        <AppText size={12} color={Colors.danger} lineHeight={19}>
+          {message}
+        </AppText>
+      ) : null}
+
+      <SheetAction label="返回" onPress={onBack} />
+    </>
   );
 }
 

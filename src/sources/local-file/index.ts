@@ -99,6 +99,39 @@ export async function pickAudioFiles(): Promise<PickedAudioFile[]> {
   });
 }
 
+/** 用户选中的播放列表文件。只暴露导入需要的三样，把 expo-file-system 留在本模块内。 */
+export type PickedPlaylistFile = {
+  /** 文件自身的位置。播放列表里的相对地址以它为基准解析。 */
+  uri: string;
+  fileName: string;
+  size: number | null;
+  read(): Promise<Uint8Array>;
+};
+
+/**
+ * 打开系统文件选择器挑选一个播放列表文件（add-m3u-import）。
+ *
+ * 与音频导入共用同一个选择器，因此放在这里而不是另起一处——「本应用怎么打开系统
+ * 文件选择器」这件事只该有一个答案。
+ *
+ * 刻意不按 MIME 过滤：`.m3u` / `.m3u8` 的 MIME 注册在各设备上并不一致（`audio/x-mpegurl`、
+ * `application/vnd.apple.mpegurl`、`text/plain` 都出现过），过滤写窄了会让用户的文件在
+ * 选择器里直接是灰的，看上去就是功能坏了。选错文件的代价小得多：解析器解不出条目时会
+ * 明确告知「不是可用的播放列表」，不会产生任何记录。
+ */
+export async function pickPlaylistFile(): Promise<PickedPlaylistFile | null> {
+  const picked = await File.pickFileAsync({ multipleFiles: false });
+  if (picked.canceled) return null;
+
+  const file = picked.result;
+  return {
+    uri: file.uri,
+    fileName: file.name,
+    size: file.size ?? null,
+    read: async () => new Uint8Array(await file.arrayBuffer()),
+  };
+}
+
 /**
  * 两端的去重键取法不同，因为两端拿到的东西根本不是一回事：
  *

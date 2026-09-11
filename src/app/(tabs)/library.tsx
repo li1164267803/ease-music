@@ -203,7 +203,7 @@ export default function LibraryScreen() {
         />
         <SheetAction
           label="导入音乐"
-          hint="本地音频文件或音频地址"
+          hint="本地音频文件、音频地址或 m3u 播放列表"
           onPress={() => {
             setAdding(false);
             setImporting(true);

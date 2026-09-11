@@ -18,8 +18,8 @@ import {
 } from '@/plugins/discovery';
 import type { LoadedPlugin } from '@/plugins/host/loader';
 import { getLoadedPlugin } from '@/plugins/manager';
-import { CandidateRow } from '@/plugins/ui/candidate-row';
-import { ImportToPlaylistSheet, type CandidateLoader } from '@/plugins/ui/import-to-playlist-sheet';
+import { CandidateRow } from '@/ui/candidate-row';
+import { ImportToPlaylistSheet, type CandidateLoader } from '@/ui/import-to-playlist-sheet';
 import { ScreenHeader } from '@/plugins/ui/screen-header';
 import { usePagedList } from '@/plugins/ui/use-paged-list';
 import { Screen } from '@/ui/screen';

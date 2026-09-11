@@ -54,3 +54,25 @@ export function toNewTrack(candidate: CandidateTrack): NewTrack {
     artworkUri: candidate.artworkUri,
   };
 }
+
+/**
+ * 一个列表来源交出的整批候选曲目。
+ *
+ * 生产者不止一个：插件发现层逐页取到 `isEnd`，播放列表导入解析一个 m3u 文件。
+ * 两者都要回答「拿到了哪些、有哪些没能拿到」，因此这个形状属于 domain 层而不是
+ * 任何一个生产者（add-m3u-import/design.md 决策 6）。
+ */
+export type CollectedTracks = {
+  items: CandidateTrack[];
+  /** 取页触顶，列表只取了前一部分。 */
+  truncated: boolean;
+  /**
+   * 识别出来但无法入库的条目。与 `truncated` 是同一类信息——都在说「有一部分没能
+   * 进来」——放在一起用户才能在同一屏上看清要入库多少、没能入库多少（决策 7）。
+   * 插件侧不产生这类条目，故为可选。
+   */
+  skipped?: SkippedEntry[];
+};
+
+/** 被跳过的一条。`line` 是原文中那一行，便于用户回去查。 */
+export type SkippedEntry = { line: string; reason: string };

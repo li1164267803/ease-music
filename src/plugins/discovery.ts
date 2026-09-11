@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 li1164267803 · 自在音乐 EaseMusic
 
-import type { CandidateTrack } from '@/domain/model/candidate-track';
+import type { CandidateTrack, CollectedTracks } from '@/domain/model/candidate-track';
 import { toCandidateTrack } from '@/plugins/candidate';
 import { invokePlugin } from '@/plugins/host/invoke';
 import type { LoadedPlugin } from '@/plugins/host/loader';
@@ -167,8 +167,6 @@ export async function fetchTrackPage(
  * 只防「插件永远回 isEnd: false」这一种情况；触顶时把已取部分交出去并标明被截断。
  */
 export const MAX_PAGES = 100;
-
-export type CollectedTracks = { items: CandidateTrack[]; truncated: boolean };
 
 /**
  * 逐页取到 `isEnd`，供「全部加入歌单」使用。任一页失败即中止并抛出——半个列表悄悄入库
