@@ -41,11 +41,15 @@ const PLUGIN_IMPLEMENTATION = [
   'src/plugins/ui/',
   'src/plugins/manager.ts',
   'src/plugins/search.ts',
+  'src/plugins/discovery.ts',
   'src/plugins/source.ts',
   'src/plugins/candidate.ts',
   'src/plugins/lyrics.ts',
   'src/plugins/screens/manage.android.tsx',
   'src/plugins/screens/search.android.tsx',
+  'src/plugins/screens/discovery.android.tsx',
+  'src/plugins/screens/discovery-sheets.android.tsx',
+  'src/plugins/screens/discovery-tracks.android.tsx',
 ];
 
 rmSync(OUTPUT_DIR, { recursive: true, force: true });

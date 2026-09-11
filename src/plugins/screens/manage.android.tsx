@@ -2,7 +2,7 @@
 // Copyright (C) 2026 li1164267803 · 自在音乐 EaseMusic
 
 import { useRouter } from 'expo-router';
-import { ChevronLeft, Search } from 'lucide-react-native';
+import { ChevronLeft, Compass, Search } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, TextInput, View } from 'react-native';
 
@@ -112,6 +112,10 @@ export default function PluginManageScreen() {
         <AppText size={24} weight="bold" letterSpacing={-0.5} style={{ flex: 1 }}>
           插件音源
         </AppText>
+        {/* 发现与搜索并列：发现内容依附于插件，入口从插件页进（add-plugin-discovery-charts/design.md 决策 2） */}
+        <Pressable onPress={() => router.push('/plugin-discovery')} hitSlop={10}>
+          <Compass size={IconSize.md} color={Colors.text} />
+        </Pressable>
         <Pressable onPress={() => router.push('/plugin-search')} hitSlop={10}>
           <Search size={IconSize.md} color={Colors.text} />
         </Pressable>

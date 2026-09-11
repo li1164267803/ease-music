@@ -57,6 +57,7 @@ module.exports = defineConfig([
                 '@/plugins/ui/**',
                 '@/plugins/manager',
                 '@/plugins/search',
+                '@/plugins/discovery',
                 '@/plugins/source',
                 '@/plugins/candidate',
                 '@/plugins/lyrics',

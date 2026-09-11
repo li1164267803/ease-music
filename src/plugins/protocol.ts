@@ -105,6 +105,14 @@ export type PluginMeta = {
   canSearchMusic: boolean;
   /** 是否实现了取播放地址。未实现的插件其曲目无法播放。 */
   canResolveMedia: boolean;
+  /**
+   * 发现能力（add-plugin-discovery-charts/design.md 决策 1）：判据分别是实现了
+   * `getTopLists` / `getRecommendSheetTags`。两者独立——只实现榜单的插件是常态，
+   * 合成一个标志会让它被迫触发一次必然失败的标签请求。详情方法（`getTopListDetail`、
+   * `getMusicSheetInfo`）不单独判定：没有列表就无从进入详情。
+   */
+  canBrowseTopLists: boolean;
+  canBrowseSheets: boolean;
 };
 
 /** 插件的默认主键。协议规定缺省为 `['id']`。 */
