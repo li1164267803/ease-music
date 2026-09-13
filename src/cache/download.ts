@@ -22,7 +22,7 @@ import { getSource } from '@/sources/registry';
  * 该曲目能否被下载（design.md 决策 9）。
  *
  * 由来源自述而不是在这里判断 `sourceId === 'local-file'`——缓存层一旦认识某个具体来源，
- * C5 网盘或任何自带本地形态的来源接进来时都要再改一次，那正是 media-source spec
+ * 将来任何自带本地形态的来源接进来时都要再改一次，那正是 media-source spec
  * 要防止的改动。来源不在注册表里（插件已卸载）时也不可下载：连地址都解析不出来。
  */
 export function isTrackCacheable(track: Track): boolean {
@@ -35,7 +35,7 @@ export type DownloadProgressHandler = (bytesWritten: number, totalBytes: number)
 /**
  * 把一首曲目的音频下载到本地，返回待写入的缓存记录。
  *
- * 地址在**轮到执行时**才解析，不在入队时解析：插件与网盘给的常是短时效链接，
+ * 地址在**轮到执行时**才解析，不在入队时解析：插件给的常是短时效链接，
  * 排队等待期间就会过期。解析走 `getSource(...).resolve(...)` 而不是 `resolveTrack`
  * ——后者命中缓存时返回的是本地路径，下载器要的是来源的真实地址（决策 5）。
  *

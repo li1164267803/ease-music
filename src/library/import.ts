@@ -109,8 +109,8 @@ export type RemoteImportResult =
 /**
  * 远程 URL 导入。
  *
- * 不读取远端文件头来获取标签——是否发起 Range 请求取远端元数据与 115 网盘是同一个
- * 问题，design.md 已记录留待 C5 一并决策。当前按 spec 允许的方式从 URL 推断标题。
+ * 不读取远端文件头来获取标签——是否发起 Range 请求取远端元数据尚未决策。
+ * 当前按 spec 允许的方式从 URL 推断标题。
  */
 export async function importRemoteUrl(input: string): Promise<RemoteImportResult> {
   const parsed = parseRemoteUrl(input);

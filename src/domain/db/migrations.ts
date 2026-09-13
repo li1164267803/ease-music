@@ -6,7 +6,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 /**
  * 迁移以 `PRAGMA user_version` 为游标顺序执行。
  *
- * 后续 change 会增改表结构（C2 缓存记录、C3 播放历史、C5 网盘字段），届时在数组
+ * 后续 change 会增改表结构（如 C2 缓存记录、C3 播放历史），届时在数组
  * 末尾追加一项即可，**已发布的迁移不得修改**——用户设备上的数据库已按旧版本执行过。
  */
 type Migration = {

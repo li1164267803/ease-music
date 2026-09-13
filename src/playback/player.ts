@@ -305,7 +305,7 @@ async function load(index: number, { autoPlay }: { autoPlay: boolean }): Promise
   });
 
   try {
-    // 每次播放前实时解析地址，不缓存——网盘与插件返回的地址有时效性（决策 4）。
+    // 每次播放前实时解析地址，不缓存——插件返回的地址有时效性（决策 4）。
     // 这里是唯一的解析入口，C2 离线缓存将在 resolveTrack 内部拦截。
     const media = await resolveTrack(track);
     if (token !== loadToken) return; // 期间用户又切了歌，丢弃这次结果

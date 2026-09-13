@@ -7,8 +7,7 @@ import type { SourceId, Track } from '@/domain/model/track';
  * 统一的媒体解析契约（design.md 决策 4）。
  *
  * 形状固定为「可播放地址 + HTTP 请求头 + User-Agent」，覆盖已识别的全部来源：
- * 本地文件返回文件 URI；远程直链返回 URL 且无需请求头；网盘返回带鉴权 token 的
- * 临时直链加必要请求头；插件返回其解析结果加防盗链请求头。
+ * 本地文件返回文件 URI；远程直链返回 URL 且无需请求头；插件返回其解析结果加防盗链请求头。
  *
  * 上层（曲库、播放器）MUST NOT 依赖任何特定来源的私有字段——这是 media-source spec
  * 的硬性要求，也由 eslint 的 no-restricted-imports 规则从引用层面阻断。
@@ -24,7 +23,7 @@ export type MediaSource = {
   readonly displayName: string;
   /**
    * 把曲目解析为可播放地址。**每次播放前实时调用**，不缓存结果——
-   * 网盘与插件返回的地址有时效性。
+   * 插件返回的地址有时效性。
    *
    * 「不缓存结果」说的是**地址**。离线缓存（C2）缓存的是**音频字节**，二者不冲突：
    * 地址仍然每次实时解析，只是命中本地缓存时根本不走到这里。
@@ -43,7 +42,7 @@ export type MediaSource = {
 export type MediaResolutionErrorCode =
   /** 曲目归属的来源标识在注册表中不存在（例如来源已被移除） */
   | 'source-not-registered'
-  /** 来源的底层资源已不存在（本地文件被删除、网盘文件被清理） */
+  /** 来源的底层资源已不存在（例如本地文件被删除） */
   | 'media-missing'
   /** 地址存在但无法访问（网络不可达、服务端报错、鉴权失败） */
   | 'media-unreachable'
