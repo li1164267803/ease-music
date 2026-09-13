@@ -27,7 +27,7 @@ export async function resolveTrack(track: Track): Promise<ResolvedMedia> {
   const source = getSource(track.sourceId);
 
   if (!source) {
-    // 来源已被移除（例如 iOS 构建裁剪掉插件模块后，用户从 Android 备份恢复的插件曲目）。
+    // 来源已被移除（例如插件被卸载后，曲库里保留下来的该插件曲目）。
     // 报告不可播放即可，MUST NOT 崩溃或卡死队列——播放层据此跳到下一首。
     throw new MediaResolutionError(
       'source-not-registered',
