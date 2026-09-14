@@ -45,26 +45,31 @@ export function buildOrder(size: number, mode: PlayMode, currentIndex: number): 
   return { order, position: currentIndex };
 }
 
-export type StepOptions = {
-  /** true 表示曲目自然播完触发，false 表示用户点击上/下一曲 */
-  auto: boolean;
-};
+/**
+ * 为什么要推进（fix-playback-failure-handling/design.md 决策 1）。
+ *
+ * - `finished`：曲目自然播完
+ * - `skipped`：装载失败或播放出错后跳过
+ * - `user`：用户点击上/下一曲
+ */
+export type AdvanceReason = 'finished' | 'skipped' | 'user';
 
 /**
  * 计算下一个要播放的队列下标。返回 null 表示应当停止播放。
  *
- * 单曲循环只在**自然播完**时重复当前曲目；用户主动点下一曲仍然切歌——
- * 否则「下一曲」这个按钮在该模式下就失去了意义。spec 只规定了播放结束的行为。
+ * 单曲循环只在**自然播完**时重复当前曲目。用户主动点下一曲仍然切歌——否则「下一曲」
+ * 这个按钮在该模式下就失去了意义；失败后的跳过也照常移动——单曲循环的语义是
+ * 「播完再来一遍」，不是把用户锁死在一首播不了的歌上。
  */
 export function step(
   { order, position }: PlayOrder,
   direction: 1 | -1,
   mode: PlayMode,
-  { auto }: StepOptions,
+  reason: AdvanceReason,
 ): { index: number; position: number } | null {
   if (order.length === 0) return null;
 
-  if (mode === 'loopOne' && auto) {
+  if (mode === 'loopOne' && reason === 'finished') {
     const index = order[position];
     return index === undefined ? null : { index, position };
   }

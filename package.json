@@ -20,7 +20,8 @@
     "check:constraints": "node tools/check-constraints.mjs",
     "check:ios-strip": "node tools/check-ios-strip.mjs",
     "test:cla": "node .github/scripts/cla.test.cjs",
-    "test:m3u": "node --import ./tools/ts-alias.mjs src/library/m3u.test.ts"
+    "test:m3u": "node --import ./tools/ts-alias.mjs src/library/m3u.test.ts",
+    "test:queue": "node --import ./tools/ts-alias.mjs src/playback/queue.test.ts"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",

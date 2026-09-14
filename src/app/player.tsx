@@ -25,7 +25,7 @@ import { useTrackCacheState } from '@/cache/store';
 import { DownloadButton } from '@/cache/ui/download-button';
 import type { PlayMode } from '@/domain/model/playback';
 import {
-  clearError,
+  clearFailure,
   next,
   previous,
   seekTo,
@@ -33,7 +33,7 @@ import {
   togglePlayPause,
 } from '@/playback/player';
 import { LyricsCard } from '@/lyrics/ui/lyrics-card';
-import { usePlayback } from '@/playback/use-playback';
+import { pendingLabel, usePlayback } from '@/playback/use-playback';
 import { Artwork } from '@/ui/artwork';
 import { formatDuration } from '@/ui/format';
 import { Slider } from '@/ui/slider';
@@ -132,6 +132,9 @@ export default function PlayerScreen() {
               {formatDuration(position)}
             </AppText>
             <AppText size={11} color={Colors.textMuted}>
+              {pendingLabel(playback)}
+            </AppText>
+            <AppText size={11} color={Colors.textMuted}>
               {duration > 0 ? `-${formatDuration(Math.max(duration - position, 0))}` : '--:--'}
             </AppText>
           </View>
@@ -175,7 +178,7 @@ export default function PlayerScreen() {
               elevation: 10,
             }}
           >
-            {playback.state === 'playing' ? (
+            {playback.playWhenReady ? (
               <Pause size={28} color={Colors.bg} fill={Colors.bg} />
             ) : (
               <Play size={28} color={Colors.bg} fill={Colors.bg} />
@@ -192,11 +195,12 @@ export default function PlayerScreen() {
           </Pressable>
         </View>
 
-        {playback.error ? (
-          // 点一下即消。失败原因必须让用户看见（spec 要求），但看过之后
-          // 不该一直占着播放器页——它会在下一次成功装载时自动清空，用户也能主动关掉。
+        {playback.failure ? (
+          // 点一下即消。失败原因必须让用户看见（spec 要求），自动跳到下一首之后也还在；
+          // 但看过之后不该一直占着播放器页——用户能主动关掉，失败的那首之后成功发声、
+          // 或队列清空时也会自动撤下。
           <Pressable
-            onPress={clearError}
+            onPress={clearFailure}
             style={{
               borderRadius: 18,
               backgroundColor: Colors.surface,
@@ -206,7 +210,7 @@ export default function PlayerScreen() {
             }}
           >
             <AppText size={13} color={Colors.danger}>
-              {playback.error}
+              {playback.failure.message}
             </AppText>
             <AppText size={11} color={Colors.textMuted}>
               点击关闭

@@ -2,12 +2,12 @@
 // Copyright (C) 2026 li1164267803 · 自在音乐 EaseMusic
 
 import { useRouter } from 'expo-router';
-import { Pause, Play, SkipForward } from 'lucide-react-native';
+import { Pause, Play, SkipForward, TriangleAlert } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { next, togglePlayPause } from '@/playback/player';
-import { usePlayback } from '@/playback/use-playback';
+import { pendingLabel, usePlayback } from '@/playback/use-playback';
 import { Artwork } from '@/ui/artwork';
 import { AppText } from '@/ui/text';
 import { Colors, MINI_DOCK_HEIGHT } from '@/ui/theme';
@@ -44,15 +44,20 @@ export function MiniPlayer() {
         <AppText size={13} weight="semibold" numberOfLines={1}>
           {playback.currentTrack.title}
         </AppText>
-        <AppText size={11} color={Colors.textMuted} numberOfLines={1}>
-          {playback.state === 'buffering'
-            ? '缓冲中…'
-            : (playback.currentTrack.artist ?? '未知艺术家')}
-        </AppText>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          {/*
+            自动跳过后这里显示的是正在播的下一首，失败原因不能替换它的副标题——
+            那会让人以为是这首坏了。图标只提示「有曲目播放失败」，原因在播放页。
+          */}
+          {playback.failure ? <TriangleAlert size={12} color={Colors.danger} /> : null}
+          <AppText size={11} color={Colors.textMuted} numberOfLines={1} style={{ flex: 1 }}>
+            {pendingLabel(playback) ?? playback.currentTrack.artist ?? '未知艺术家'}
+          </AppText>
+        </View>
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingRight: 4 }}>
         <Pressable onPress={() => void togglePlayPause()} hitSlop={8}>
-          {playback.state === 'playing' ? (
+          {playback.playWhenReady ? (
             <Pause size={19} color={Colors.text} fill={Colors.text} />
           ) : (
             <Play size={19} color={Colors.text} fill={Colors.text} />

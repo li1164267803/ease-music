@@ -20,3 +20,15 @@ export function usePlayback(): PlaybackSnapshot {
 
   return useSyncExternalStore(subscribe, getSnapshot);
 }
+
+/**
+ * 用户想播、引擎却还没发声时的指示文案（fix-playback-failure-handling/design.md 决策 5）。
+ *
+ * 只在意图为播放时给出：队列为空时的预装载同样处于 `loading`，那不是「正在加载」给用户的反馈。
+ */
+export function pendingLabel({ state, playWhenReady }: PlaybackSnapshot): string | null {
+  if (!playWhenReady) return null;
+  if (state === 'loading') return '正在加载…';
+  if (state === 'buffering') return '缓冲中…';
+  return null;
+}
