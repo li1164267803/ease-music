@@ -2,7 +2,7 @@
 // Copyright (C) 2026 li1164267803 · 自在音乐 EaseMusic
 
 import type { ReactNode } from 'react';
-import { Modal, Pressable, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/ui/text';
@@ -15,29 +15,36 @@ type SheetProps = {
   children: ReactNode;
 };
 
-/** 底部弹层。沿用设计稿卡片的 surface 底色与 18 圆角。 */
+/**
+ * 底部弹层。沿用设计稿卡片的 surface 底色与 18 圆角。
+ *
+ * 键盘避让在这里统一处理（fix-android-acceptance-ui-issues/design.md 决策 2）：`Modal` 里的
+ * 内容不随窗口调整位置，由弹层自己把内容区顶到键盘上方，遮罩相应缩短，所有面板一次生效。
+ */
 export function Sheet({ visible, title, onClose, children }: SheetProps) {
   const insets = useSafeAreaInsets();
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: '#000000A6' }} onPress={onClose} />
-      <View
-        style={{
-          backgroundColor: Colors.surface,
-          borderTopLeftRadius: 18,
-          borderTopRightRadius: 18,
-          paddingTop: 18,
-          paddingHorizontal: SCREEN_PADDING,
-          paddingBottom: 18 + insets.bottom,
-          gap: 14,
-        }}
-      >
-        <AppText size={17} weight="bold">
-          {title}
-        </AppText>
-        {children}
-      </View>
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+        <Pressable style={{ flex: 1, backgroundColor: '#000000A6' }} onPress={onClose} />
+        <View
+          style={{
+            backgroundColor: Colors.surface,
+            borderTopLeftRadius: 18,
+            borderTopRightRadius: 18,
+            paddingTop: 18,
+            paddingHorizontal: SCREEN_PADDING,
+            paddingBottom: 18 + insets.bottom,
+            gap: 14,
+          }}
+        >
+          <AppText size={17} weight="bold">
+            {title}
+          </AppText>
+          {children}
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

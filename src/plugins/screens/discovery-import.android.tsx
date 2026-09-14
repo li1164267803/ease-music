@@ -6,14 +6,13 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
 
 import { candidateKey, type CandidateTrack } from '@/domain/model/candidate-track';
-import { addCandidateTrack } from '@/library/import';
-import { notifyLibraryChanged } from '@/library/store';
 import { importItem, importSheet, type ImportOutcome } from '@/plugins/discovery';
 import type { LoadedPlugin } from '@/plugins/host/loader';
 import { importingPlugins } from '@/plugins/manager';
 import { CandidateRow } from '@/ui/candidate-row';
 import { ImportToPlaylistSheet, type CandidateLoader } from '@/ui/import-to-playlist-sheet';
 import { ScreenHeader } from '@/plugins/ui/screen-header';
+import { useCandidateAdd } from '@/plugins/ui/use-candidate-add';
 import { Chip } from '@/ui/chip';
 import { Screen } from '@/ui/screen';
 import { SheetAction } from '@/ui/sheet';
@@ -84,8 +83,7 @@ function ImportForm({ plugin }: { plugin: LoadedPlugin }) {
   const [mode, setMode] = useState<ImportMode>(modes[0] ?? 'sheet');
   const [input, setInput] = useState('');
   const [result, setResult] = useState<Result>(IDLE);
-  const [added, setAdded] = useState<ReadonlySet<string>>(new Set());
-  const [notice, setNotice] = useState<string | null>(null);
+  const { added, notice, add, clearNotice } = useCandidateAdd();
   const [importing, setImporting] = useState(false);
 
   const hints = mode === 'sheet' ? meta.importHints.sheet : meta.importHints.item;
@@ -101,7 +99,7 @@ function ImportForm({ plugin }: { plugin: LoadedPlugin }) {
     const urlLike = input.trim();
     if (!urlLike || result.status === 'busy') return;
     setResult({ status: 'busy' });
-    setNotice(null);
+    clearNotice();
     try {
       const outcome: ImportOutcome =
         mode === 'sheet' ? await importSheet(plugin, urlLike) : await importItem(plugin, urlLike);
@@ -116,13 +114,6 @@ function ImportForm({ plugin }: { plugin: LoadedPlugin }) {
         reason: error instanceof Error ? error.message : String(error),
       });
     }
-  };
-
-  const add = async (candidate: CandidateTrack) => {
-    const { duplicate } = await addCandidateTrack(candidate);
-    notifyLibraryChanged();
-    setAdded((previous) => new Set(previous).add(candidateKey(candidate)));
-    setNotice(duplicate ? `「${candidate.title}」已在曲库中。` : null);
   };
 
   const canResolve = input.trim().length > 0 && result.status !== 'busy';

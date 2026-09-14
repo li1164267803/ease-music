@@ -25,12 +25,12 @@ export function RiskNotice({ visible, onAcknowledge, onClose }: RiskNoticeProps)
   return (
     <Sheet visible={visible} title="安装插件前请先了解" onClose={onClose}>
       <AppText size={13} lineHeight={21}>
-        插件是第三方编写的代码，运行时与本应用处于同一环境，能力与应用自身代码相同：
-        它可以访问网络，也可以读写本应用的数据。本应用不对插件的行为提供任何限制或审核。
+        {'插件是第三方编写的代码，运行时与本应用处于同一环境，能力与应用自身代码相同：' +
+          '它可以访问网络，也可以读写本应用的数据。本应用不对插件的行为提供任何限制或审核。'}
       </AppText>
       <AppText size={12} color={Colors.textMuted} lineHeight={19}>
-        请只安装你信任其来源的插件。本应用不提供、不内置、不推荐任何插件，从哪里获取插件
-        完全由你决定，由此产生的后果也由你自行承担。
+        {'请只安装你信任其来源的插件。本应用不提供、不内置、不推荐任何插件，从哪里获取插件' +
+          '完全由你决定，由此产生的后果也由你自行承担。'}
       </AppText>
       <AppText size={12} color={Colors.textMuted} lineHeight={19}>
         插件可使用的第三方库：{INJECTED_MODULE_NAMES.join('、')}。

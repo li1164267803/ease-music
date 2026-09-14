@@ -6,9 +6,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
-import { candidateKey, type CandidateTrack } from '@/domain/model/candidate-track';
-import { addCandidateTrack } from '@/library/import';
-import { notifyLibraryChanged } from '@/library/store';
+import { candidateKey } from '@/domain/model/candidate-track';
 import {
   collectTracks,
   fetchTrackPage,
@@ -21,6 +19,7 @@ import { getLoadedPlugin } from '@/plugins/manager';
 import { CandidateRow } from '@/ui/candidate-row';
 import { ImportToPlaylistSheet, type CandidateLoader } from '@/ui/import-to-playlist-sheet';
 import { ScreenHeader } from '@/plugins/ui/screen-header';
+import { useCandidateAdd } from '@/plugins/ui/use-candidate-add';
 import { usePagedList } from '@/plugins/ui/use-paged-list';
 import { Screen } from '@/ui/screen';
 import { SheetAction } from '@/ui/sheet';
@@ -85,17 +84,8 @@ function TrackList({
     [plugin, kind, item],
   );
 
-  const [added, setAdded] = useState<ReadonlySet<string>>(new Set());
-  const [notice, setNotice] = useState<string | null>(null);
+  const { added, notice, add } = useCandidateAdd();
   const [importing, setImporting] = useState(false);
-
-  const add = async (candidate: CandidateTrack) => {
-    const { duplicate } = await addCandidateTrack(candidate);
-    notifyLibraryChanged();
-    setAdded((previous) => new Set(previous).add(candidateKey(candidate)));
-    // 同一插件同一曲目不产生重复记录，并告知用户（plugin-discovery spec）
-    setNotice(duplicate ? `「${candidate.title}」已在曲库中。` : null);
-  };
 
   return (
     <>

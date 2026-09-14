@@ -36,19 +36,23 @@ let running: QueueTask | null = null;
  * 批量下载完成后要告诉用户成功了几首、哪几首失败（spec 的批量下载要求），
  * 而队列排空之后这份结果必须还在——否则用户什么也看不到。下一次入队时重置。
  */
-let round: { completed: number; failed: DownloadFailure[] } = { completed: 0, failed: [] };
+let round: { completedIds: string[]; failed: DownloadFailure[] } = { completedIds: [], failed: [] };
 
 /** 失败要连**原因**一起带出来：spec 要求说明原因，只报一个标题等于没说。 */
-export type DownloadFailure = { title: string; reason: string };
+export type DownloadFailure = { trackId: string; title: string; reason: string };
 
+/**
+ * 队列是全局的，结果却要按「这批曲目」读（fix-android-acceptance-ui-issues/design.md 决策 3）：
+ * 每一项都带曲目 id，读取方用自己关心的曲目集合去求交，而不是原样展示全局计数。
+ */
 export type DownloadQueueSnapshot = {
   /** 等待中 + 下载中 */
-  pending: number;
-  completed: number;
+  pendingIds: readonly string[];
+  completedIds: readonly string[];
   failed: readonly DownloadFailure[];
 };
 
-let snapshot: DownloadQueueSnapshot = { pending: 0, completed: 0, failed: [] };
+let snapshot: DownloadQueueSnapshot = { pendingIds: [], completedIds: [], failed: [] };
 const listeners = new Set<() => void>();
 
 /**
@@ -59,8 +63,8 @@ const listeners = new Set<() => void>();
  */
 function publish(): void {
   snapshot = {
-    pending: waiting.length + (running ? 1 : 0),
-    completed: round.completed,
+    pendingIds: [...waiting, ...(running ? [running] : [])].map((task) => task.track.id),
+    completedIds: [...round.completedIds],
     failed: [...round.failed],
   };
   listeners.forEach((listener) => listener());
@@ -84,7 +88,7 @@ export function useDownloadQueue(): DownloadQueueSnapshot {
  * 来源声明不可缓存的（本地文件的音频本就在设备上，再复制一份纯属浪费）。
  */
 export function enqueueDownloads(tracks: readonly Track[]): number {
-  if (waiting.length === 0 && running === null) round = { completed: 0, failed: [] };
+  if (waiting.length === 0 && running === null) round = { completedIds: [], failed: [] };
 
   let added = 0;
   for (const track of tracks) {
@@ -131,7 +135,7 @@ async function pump(): Promise<void> {
     }
 
     await saveCacheEntry(record);
-    round.completed += 1;
+    round.completedIds.push(task.track.id);
     // 已下载分类与占用统计都是数据库的视图，让它们跟着重查一次。
     notifyLibraryChanged();
   } catch (error) {
@@ -142,7 +146,7 @@ async function pump(): Promise<void> {
       const reason = error instanceof Error ? error.message : '下载失败。';
       setTrackCacheState(task.track.id, { status: 'failed', reason });
       // 单首失败不中断其余曲目——spec 的批量下载要求。
-      round.failed.push({ title: task.track.title, reason });
+      round.failed.push({ trackId: task.track.id, title: task.track.title, reason });
     }
   } finally {
     running = null;

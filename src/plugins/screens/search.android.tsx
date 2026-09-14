@@ -7,9 +7,7 @@ import { ChevronLeft } from 'lucide-react-native';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 
-import { candidateKey, type CandidateTrack } from '@/domain/model/candidate-track';
-import { addCandidateTrack } from '@/library/import';
-import { notifyLibraryChanged } from '@/library/store';
+import { candidateKey } from '@/domain/model/candidate-track';
 import { discoveryKey } from '@/plugins/discovery';
 import { searchablePlugins } from '@/plugins/manager';
 import { CONTENT_SEARCH_TYPES, type ContentSearchType } from '@/plugins/protocol';
@@ -17,6 +15,7 @@ import { searchPlugins, type SearchFailure, type SearchPage } from '@/plugins/se
 import { CandidateRow } from '@/ui/candidate-row';
 import { DiscoveryArtistRow } from '@/plugins/ui/discovery-artist-row';
 import { DiscoveryItemRow } from '@/plugins/ui/discovery-item-row';
+import { useCandidateAdd } from '@/plugins/ui/use-candidate-add';
 import { Chip } from '@/ui/chip';
 import { Screen } from '@/ui/screen';
 import { SearchField } from '@/ui/search-field';
@@ -53,7 +52,7 @@ export default function PluginSearchScreen() {
   const [failures, setFailures] = useState<SearchFailure[]>([]);
   const [page, setPage] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [added, setAdded] = useState<ReadonlySet<string>>(new Set());
+  const { added, notice, add } = useCandidateAdd();
 
   const hasSearchable = searchablePlugins(type).length > 0;
 
@@ -62,6 +61,8 @@ export default function PluginSearchScreen() {
     if (!query || busy) return;
 
     setBusy(true);
+    // 新的一次搜索：上一次的失败不属于它，加载期间不能继续挂在列表底部
+    if (nextPage === 1) setFailures([]);
     try {
       // 第一页查全部支持该类型的插件；后续页只查上一页表示「还有」的那些，
       // 避免向已经到底的插件反复要下一页。
@@ -87,12 +88,6 @@ export default function PluginSearchScreen() {
     setContinuing([]);
     setFailures([]);
     setPage(0);
-  };
-
-  const add = async (candidate: CandidateTrack) => {
-    await addCandidateTrack(candidate);
-    notifyLibraryChanged();
-    setAdded((previous) => new Set(previous).add(candidateKey(candidate)));
   };
 
   return (
@@ -126,10 +121,17 @@ export default function PluginSearchScreen() {
         />
       ) : null}
 
+      {/* 提示放在列表上方而不是尾部：长列表的尾部在屏幕之外，放那里等于没提示 */}
+      {notice ? (
+        <AppText size={12} color={Colors.textMuted} lineHeight={19}>
+          {notice}
+        </AppText>
+      ) : null}
+
       {!hasSearchable ? (
         <AppText size={12} color={Colors.textMuted} lineHeight={19}>
-          当前没有支持搜索{TYPE_LABELS[type]}
-          的插件。已安装的插件中没有声明支持这一类型的，或者你还没有安装任何插件。
+          {`当前没有支持搜索${TYPE_LABELS[type]}的插件。` +
+            '已安装的插件中没有声明支持这一类型的，或者你还没有安装任何插件。'}
         </AppText>
       ) : (
         <FlashList

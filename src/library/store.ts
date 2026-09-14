@@ -90,21 +90,27 @@ export function useCollections(kind: CollectionKind): Collection[] {
   const tracks = useTracks('title', '');
 
   return useMemo(() => {
-    const groups = new Map<string, Track[]>();
+    // 键为 null 的一组是「缺少该信息的曲目」，不是一张专辑或一位艺人
+    const groups = new Map<string | null, Track[]>();
     for (const track of tracks) {
-      const name = (kind === 'album' ? track.album : track.artist) ?? UNKNOWN[kind];
-      const existing = groups.get(name);
+      const key = kind === 'album' ? track.album : track.artist;
+      const existing = groups.get(key);
       if (existing) existing.push(track);
-      else groups.set(name, [track]);
+      else groups.set(key, [track]);
     }
 
     return [...groups]
-      .map(([name, items]) => ({
-        name,
-        meta: kind === 'album' ? (items[0]?.artist ?? UNKNOWN.artist) : `${items.length} 首`,
-        coverUri: items.find((item) => item.artworkUri)?.artworkUri ?? null,
-        tracks: items,
-      }))
+      .map(([key, items]) =>
+        key === null
+          ? // 任何一首的封面与艺术家都代表不了这个集合（fix-android-acceptance-ui-issues/design.md 决策 7）
+            { name: UNKNOWN[kind], meta: `${items.length} 首`, coverUri: null, tracks: items }
+          : {
+              name: key,
+              meta: kind === 'album' ? (items[0]?.artist ?? UNKNOWN.artist) : `${items.length} 首`,
+              coverUri: items.find((item) => item.artworkUri)?.artworkUri ?? null,
+              tracks: items,
+            },
+      )
       .sort((a, b) => b.tracks.length - a.tracks.length);
   }, [tracks, kind]);
 }

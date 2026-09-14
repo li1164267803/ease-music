@@ -14,11 +14,26 @@ type IndexedTrackRowProps = {
   track: Track;
   /** 在歌单中的序号，从 1 开始 */
   position: number;
+  /** 序号列宽度。同一列表内所有行必须相同才对齐，由列表用 `positionColumnWidth` 算出 */
+  positionWidth: number;
   active: boolean;
   onPress: () => void;
   onMore: () => void;
   onLongPress?: () => void;
 };
+
+/** 设计稿给两位数序号的宽度 */
+const BASE_POSITION_WIDTH = 22;
+/** 13 号字等宽数字的宽度，略留余量 */
+const DIGIT_WIDTH = 8;
+
+/**
+ * 序号列宽度按列表总行数的位数计算（fix-android-acceptance-ui-issues/design.md 决策 4）：
+ * 「最多有几位」只有列表知道；两位数及以内保持设计稿宽度，每多一位加一个数字宽。
+ */
+export function positionColumnWidth(count: number): number {
+  return BASE_POSITION_WIDTH + Math.max(0, String(count).length - 2) * DIGIT_WIDTH;
+}
 
 /**
  * 歌单详情里的曲目行：序号列 + 曲目信息 + 时长。
@@ -29,6 +44,7 @@ type IndexedTrackRowProps = {
 export function IndexedTrackRow({
   track,
   position,
+  positionWidth,
   active,
   onPress,
   onMore,
@@ -48,11 +64,16 @@ export function IndexedTrackRow({
         backgroundColor: active ? Colors.accentSoft : 'transparent',
       }}
     >
-      <View style={{ width: 22, alignItems: 'center' }}>
+      <View style={{ width: positionWidth, alignItems: 'center' }}>
         {active ? (
           <AudioLines size={17} color={Colors.accent} />
         ) : (
-          <AppText size={13} color={Colors.textMuted}>
+          <AppText
+            size={13}
+            color={Colors.textMuted}
+            numberOfLines={1}
+            style={{ fontVariant: ['tabular-nums'] }}
+          >
             {position}
           </AppText>
         )}

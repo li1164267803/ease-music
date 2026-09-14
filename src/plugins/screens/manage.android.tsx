@@ -40,7 +40,8 @@ export default function PluginManageScreen() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const [riskAcknowledged, setRiskAcknowledged] = useState(true);
+  /** `null` 表示尚未读到：风险告知是强制门槛，读到之前不能按「已确认」放行。 */
+  const [riskAcknowledged, setRiskAcknowledged] = useState<boolean | null>(null);
   const [riskVisible, setRiskVisible] = useState(false);
   const [pendingInstall, setPendingInstall] = useState<(() => void) | null>(null);
 
@@ -54,8 +55,8 @@ export default function PluginManageScreen() {
   }, []);
 
   /** 首次安装前必须先过一次风险告知。已确认过的用户不再拦截。 */
-  const guarded = (action: () => void) => {
-    if (riskAcknowledged) {
+  const guarded = async (action: () => void) => {
+    if (riskAcknowledged ?? (await readRiskAcknowledged())) {
       action();
       return;
     }
@@ -129,15 +130,15 @@ export default function PluginManageScreen() {
       >
         {plugins.length === 0 ? (
           <AppText size={12} color={Colors.textMuted} lineHeight={19}>
-            还没有安装任何插件。本应用不提供、不内置、也不推荐任何插件，
-            你需要自行获取插件文件或它的地址。
+            {'还没有安装任何插件。本应用不提供、不内置、也不推荐任何插件，' +
+              '你需要自行获取插件文件或它的地址。'}
           </AppText>
         ) : (
           plugins.map((plugin) => (
             <PluginCard
               key={plugin.platform}
               plugin={plugin}
-              onUpdate={() => guarded(() => void run(() => updatePlugin(plugin.platform)))}
+              onUpdate={() => void guarded(() => void run(() => updatePlugin(plugin.platform)))}
               onVariables={() => setVariablesFor(plugin)}
               onRemove={() => void remove(plugin.platform)}
             />
@@ -148,12 +149,12 @@ export default function PluginManageScreen() {
           <SheetAction
             label="从文件安装"
             hint="选择设备上的插件文件"
-            onPress={() => guarded(() => void run(installFromFile))}
+            onPress={() => void guarded(() => void run(installFromFile))}
           />
           <SheetAction
             label="从地址安装"
             hint="输入你已知的插件地址"
-            onPress={() => guarded(() => setUrlVisible(true))}
+            onPress={() => void guarded(() => setUrlVisible(true))}
           />
         </View>
 
@@ -204,8 +205,8 @@ export default function PluginManageScreen() {
 
       <Sheet visible={confirmation !== null} title="版本确认" onClose={() => setConfirmation(null)}>
         <AppText size={13} lineHeight={21}>
-          已安装「{confirmation?.platform}」的版本为 {confirmation?.installedVersion ?? '未知'}，
-          即将安装的版本为 {confirmation?.incomingVersion ?? '未知'}，不是更高的版本。
+          {`已安装「${confirmation?.platform}」的版本为 ${confirmation?.installedVersion ?? '未知'}，` +
+            `即将安装的版本为 ${confirmation?.incomingVersion ?? '未知'}，不是更高的版本。`}
         </AppText>
         <SheetAction label="仍然替换" danger onPress={() => void confirmDowngrade()} />
       </Sheet>
@@ -253,10 +254,16 @@ function PluginCard({
           该插件声明的适配版本与当前应用不一致，可能无法正常工作。
         </AppText>
       ) : null}
+      {/* 入口保留为不可用而不是藏起来：用户要知道为什么没法更新（plugin-source spec「按插件自述地址更新」） */}
+      {plugin.srcUrl ? null : (
+        <AppText size={11} color={Colors.textMuted} lineHeight={17}>
+          该插件未声明更新地址，无法自动更新。
+        </AppText>
+      )}
 
       <View style={{ flexDirection: 'row', gap: 18, marginTop: 4 }}>
         <CardAction label="设置" onPress={onVariables} />
-        {plugin.srcUrl ? <CardAction label="更新" onPress={onUpdate} /> : null}
+        <CardAction label="更新" disabled={!plugin.srcUrl} onPress={onUpdate} />
         <CardAction label="卸载" danger onPress={onRemove} />
       </View>
     </View>
@@ -266,15 +273,18 @@ function PluginCard({
 function CardAction({
   label,
   danger = false,
+  disabled = false,
   onPress,
 }: {
   label: string;
   danger?: boolean;
+  disabled?: boolean;
   onPress: () => void;
 }) {
+  const color = disabled ? Colors.textMuted : danger ? Colors.danger : Colors.accent;
   return (
-    <Pressable onPress={onPress} hitSlop={8}>
-      <AppText size={12} weight="medium" color={danger ? Colors.danger : Colors.accent}>
+    <Pressable onPress={onPress} disabled={disabled} hitSlop={8}>
+      <AppText size={12} weight="medium" color={color}>
         {label}
       </AppText>
     </Pressable>

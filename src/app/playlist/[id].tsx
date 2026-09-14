@@ -31,7 +31,7 @@ import { usePlayback } from '@/playback/use-playback';
 import { Artwork } from '@/ui/artwork';
 import { CircleButton } from '@/ui/circle-button';
 import { formatRelativeDay, formatTotalDuration } from '@/ui/format';
-import { IndexedTrackRow } from '@/ui/indexed-track-row';
+import { IndexedTrackRow, positionColumnWidth } from '@/ui/indexed-track-row';
 import { FloatingMiniPlayer, useMiniDockInset } from '@/ui/mini-player';
 import { NameSheet } from '@/ui/name-sheet';
 import { Screen } from '@/ui/screen';
@@ -47,6 +47,7 @@ import { TrackActionsSheet } from '@/ui/track-actions-sheet';
 function DraggableTrackRow(props: {
   track: Track;
   position: number;
+  positionWidth: number;
   active: boolean;
   onPress: () => void;
   onMore: () => void;
@@ -60,8 +61,18 @@ function DraggableTrackRow(props: {
  *
  * 队列排空后仍然报一次结果——offline-cache spec 要求「最终告知用户哪些曲目未成功」，
  * 而失败的那几首在列表里只是各自显示一个警告图标，用户不会挨行去找。
+ *
+ * 队列是全局的，这里只统计本歌单的曲目：在别的歌单发起的下载与本歌单无关，
+ * 同一首曲目同时在两个歌单里时，两边都如实看到它（design.md 决策 3）。
  */
-function describeQueue({ pending, completed, failed }: DownloadQueueSnapshot): string | null {
+function describeQueue(
+  snapshot: DownloadQueueSnapshot,
+  trackIds: ReadonlySet<string>,
+): string | null {
+  const pending = snapshot.pendingIds.filter((trackId) => trackIds.has(trackId)).length;
+  const completed = snapshot.completedIds.filter((trackId) => trackIds.has(trackId)).length;
+  const failed = snapshot.failed.filter((failure) => trackIds.has(failure.trackId));
+
   if (pending > 0) return `正在下载，还剩 ${pending} 首`;
   if (completed === 0 && failed.length === 0) return null;
 
@@ -116,7 +127,9 @@ export default function PlaylistDetailScreen() {
   };
 
   const total = formatTotalDuration(playlist?.durationMs ?? null);
-  const downloadNotice = describeQueue(useDownloadQueue());
+  const trackIds = useMemo(() => new Set(tracks.map((track) => track.id)), [tracks]);
+  const downloadNotice = describeQueue(useDownloadQueue(), trackIds);
+  const positionWidth = positionColumnWidth(tracks.length);
 
   return (
     <Screen gap={22}>
@@ -219,6 +232,7 @@ export default function PlaylistDetailScreen() {
           <DraggableTrackRow
             track={item}
             position={index + 1}
+            positionWidth={positionWidth}
             active={playback.currentTrack?.id === item.id}
             onPress={() => void playPlaylist(id, item.id)}
             onMore={() => setActionsFor(item)}
