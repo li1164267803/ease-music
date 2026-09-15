@@ -22,6 +22,17 @@ export function usePlayback(): PlaybackSnapshot {
 }
 
 /**
+ * 某首曲目是否为当前曲目。
+ *
+ * 快照返回布尔值而不是整个播放状态，只有「是 / 否」翻转时才触发重渲染：长列表的每一行
+ * 各自订阅，播放中每 500ms 一次的进度发布不会让整页或整列跟着重渲染
+ * （improve-long-list-scroll/design.md 决策 3）。播放服务由根布局初始化，这里只读状态。
+ */
+export function useIsCurrentTrack(trackId: string): boolean {
+  return useSyncExternalStore(subscribe, () => getSnapshot().currentTrack?.id === trackId);
+}
+
+/**
  * 用户想播、引擎却还没发声时的指示文案（fix-playback-failure-handling/design.md 决策 5）。
  *
  * 只在意图为播放时给出：队列为空时的预装载同样处于 `loading`，那不是「正在加载」给用户的反馈。

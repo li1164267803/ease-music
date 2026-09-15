@@ -6,6 +6,7 @@ import { Pressable, View } from 'react-native';
 
 import { DownloadButton } from '@/cache/ui/download-button';
 import type { Track } from '@/domain/model/track';
+import { useIsCurrentTrack } from '@/playback/use-playback';
 import { formatDuration, trackSubtitle } from '@/ui/format';
 import { AppText } from '@/ui/text';
 import { Colors } from '@/ui/theme';
@@ -16,7 +17,6 @@ type IndexedTrackRowProps = {
   position: number;
   /** 序号列宽度。同一列表内所有行必须相同才对齐，由列表用 `positionColumnWidth` 算出 */
   positionWidth: number;
-  active: boolean;
   onPress: () => void;
   onMore: () => void;
   onLongPress?: () => void;
@@ -45,11 +45,12 @@ export function IndexedTrackRow({
   track,
   position,
   positionWidth,
-  active,
   onPress,
   onMore,
   onLongPress,
 }: IndexedTrackRowProps) {
+  const active = useIsCurrentTrack(track.id);
+
   return (
     <Pressable
       onPress={onPress}

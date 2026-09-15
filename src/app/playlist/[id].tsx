@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 li1164267803 · 自在音乐 EaseMusic
 
+import { FlashList } from '@shopify/flash-list';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   ArrowDownToLine,
@@ -11,7 +12,7 @@ import {
   Search,
   Shuffle,
 } from 'lucide-react-native';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import ReorderableList, { reorderItems, useReorderableDrag } from 'react-native-reorderable-list';
 
@@ -27,7 +28,6 @@ import {
 import { playPlaylist } from '@/library/actions';
 import { notifyLibraryChanged, useLibraryQuery } from '@/library/store';
 import { setPlayMode } from '@/playback/player';
-import { usePlayback } from '@/playback/use-playback';
 import { Artwork } from '@/ui/artwork';
 import { CircleButton } from '@/ui/circle-button';
 import { formatRelativeDay, formatTotalDuration } from '@/ui/format';
@@ -41,19 +41,25 @@ import { Colors } from '@/ui/theme';
 import { TrackActionsSheet } from '@/ui/track-actions-sheet';
 
 /**
- * 长按进入拖动。`useReorderableDrag` 只能在列表项内部调用，因此单独包一层，
- * 而不是把拖动手柄的概念泄漏进通用的行组件。
+ * 排序模式下长按进入拖动。`useReorderableDrag` 只能在可拖动列表的列表项内部调用，
+ * 因此单独包一层，而不是把拖动手柄的概念泄漏进通用的行组件。
  */
 function DraggableTrackRow(props: {
   track: Track;
   position: number;
   positionWidth: number;
-  active: boolean;
   onPress: () => void;
   onMore: () => void;
 }) {
   const drag = useReorderableDrag();
   return <IndexedTrackRow {...props} onLongPress={drag} />;
+}
+
+/** 行与行之间的间距，常态列表的分隔与可拖动列表的 `gap` 共用 */
+const ROW_GAP = 2;
+
+function RowSeparator() {
+  return <View style={{ height: ROW_GAP }} />;
 }
 
 /**
@@ -93,7 +99,6 @@ export default function PlaylistDetailScreen() {
   const dockInset = useMiniDockInset();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const playback = usePlayback();
 
   const playlist = useLibraryQuery(() => getPlaylist(id), [id]);
   const stored = useLibraryQuery(() => listPlaylistTracks(id), [id]);
@@ -116,6 +121,7 @@ export default function PlaylistDetailScreen() {
   }, [stored, pendingOrder]);
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sorting, setSorting] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [actionsFor, setActionsFor] = useState<Track | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -131,19 +137,52 @@ export default function PlaylistDetailScreen() {
   const downloadNotice = describeQueue(useDownloadQueue(), trackIds);
   const positionWidth = positionColumnWidth(tracks.length);
 
+  const rowProps = useCallback(
+    (item: Track, index: number) => ({
+      track: item,
+      position: index + 1,
+      positionWidth,
+      onPress: () => void playPlaylist(id, item.id),
+      onMore: () => setActionsFor(item),
+    }),
+    [id, positionWidth],
+  );
+  const renderRow = useCallback(
+    ({ item, index }: { item: Track; index: number }) => (
+      <IndexedTrackRow {...rowProps(item, index)} />
+    ),
+    [rowProps],
+  );
+  const renderDraggableRow = useCallback(
+    ({ item, index }: { item: Track; index: number }) => (
+      <DraggableTrackRow {...rowProps(item, index)} />
+    ),
+    [rowProps],
+  );
+
+  const hint = sorting ? '长按曲目，拖动到新的位置' : (downloadNotice ?? notice);
+
   return (
     <Screen gap={22}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <Pressable onPress={() => router.back()} hitSlop={10}>
           <ChevronLeft size={24} color={Colors.text} />
         </Pressable>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
-          {/* 歌单内搜索尚未实现，先渲染出设计稿的位置 */}
-          <Search size={22} color={Colors.text} />
-          <Pressable onPress={() => setMenuOpen(true)} hitSlop={10}>
-            <Ellipsis size={22} color={Colors.text} />
+        {sorting ? (
+          <Pressable onPress={() => setSorting(false)} hitSlop={10}>
+            <AppText size={15} weight="semibold" color={Colors.accent}>
+              完成
+            </AppText>
           </Pressable>
-        </View>
+        ) : (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+            {/* 歌单内搜索尚未实现，先渲染出设计稿的位置 */}
+            <Search size={22} color={Colors.text} />
+            <Pressable onPress={() => setMenuOpen(true)} hitSlop={10}>
+              <Ellipsis size={22} color={Colors.text} />
+            </Pressable>
+          </View>
+        )}
       </View>
 
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 18 }}>
@@ -211,37 +250,51 @@ export default function PlaylistDetailScreen() {
         />
       </View>
 
-      {(downloadNotice ?? notice) ? (
+      {hint ? (
         <AppText size={12} color={Colors.textMuted}>
-          {downloadNotice ?? notice}
+          {hint}
         </AppText>
       ) : null}
 
-      <ReorderableList
-        data={tracks}
-        keyExtractor={(track) => track.id}
-        contentContainerStyle={{ paddingBottom: dockInset, gap: 2 }}
-        showsVerticalScrollIndicator={false}
-        onReorder={({ from, to }) => {
-          const order = reorderItems(tracks, from, to).map((track) => track.id);
-          setPendingOrder(order);
-          // 顺序即刻持久化——playlist spec 要求重启后顺序保持
-          void reorderPlaylist(id, order).then(notifyLibraryChanged);
-        }}
-        renderItem={({ item, index }) => (
-          <DraggableTrackRow
-            track={item}
-            position={index + 1}
-            positionWidth={positionWidth}
-            active={playback.currentTrack?.id === item.id}
-            onPress={() => void playPlaylist(id, item.id)}
-            onMore={() => setActionsFor(item)}
-          />
-        )}
-        style={{ flex: 1 }}
-      />
+      {/*
+        常态用回收行的 FlashList，只有排序模式才换成可拖动列表：后者不回收行、每行还包着
+        拖动用的动画视图，数千行快速滚动时 JS 线程被占满、列表整片空白
+        （improve-long-list-scroll/measurements.md「4.5 评估」）。拖动只在排序时需要。
+      */}
+      {sorting ? (
+        <ReorderableList
+          data={tracks}
+          keyExtractor={(track) => track.id}
+          contentContainerStyle={{ paddingBottom: dockInset, gap: ROW_GAP }}
+          showsVerticalScrollIndicator={false}
+          onReorder={({ from, to }) => {
+            const order = reorderItems(tracks, from, to).map((track) => track.id);
+            setPendingOrder(order);
+            // 顺序即刻持久化——playlist spec 要求重启后顺序保持
+            void reorderPlaylist(id, order).then(notifyLibraryChanged);
+          }}
+          renderItem={renderDraggableRow}
+          style={{ flex: 1 }}
+        />
+      ) : (
+        <FlashList
+          data={tracks}
+          keyExtractor={(track) => track.id}
+          contentContainerStyle={{ paddingBottom: dockInset }}
+          ItemSeparatorComponent={RowSeparator}
+          showsVerticalScrollIndicator={false}
+          renderItem={renderRow}
+        />
+      )}
 
       <Sheet visible={menuOpen} title={playlist?.name ?? ''} onClose={() => setMenuOpen(false)}>
+        <SheetAction
+          label="调整顺序"
+          onPress={() => {
+            setMenuOpen(false);
+            setSorting(true);
+          }}
+        />
         <SheetAction
           label="重命名"
           onPress={() => {

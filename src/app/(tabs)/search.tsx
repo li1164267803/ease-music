@@ -3,14 +3,14 @@
 
 import { FlashList } from '@shopify/flash-list';
 import { ArrowUpDown } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import type { Track, TrackSortKey } from '@/domain/model/track';
 import { loadLibrarySort, saveLibrarySort } from '@/domain/settings';
 import { useTracks } from '@/library/store';
 import { playQueue } from '@/playback/player';
-import { usePlayback } from '@/playback/use-playback';
+import { useIsCurrentTrack } from '@/playback/use-playback';
 import { ImportSheet } from '@/ui/import-sheet';
 import { Screen } from '@/ui/screen';
 import { SearchField } from '@/ui/search-field';
@@ -28,6 +28,19 @@ const SORTS: { key: TrackSortKey; label: string }[] = [
   { key: 'artist', label: '艺人' },
 ];
 
+function RowSeparator() {
+  return <View style={{ height: TRACK_ROW_GAP }} />;
+}
+
+/**
+ * 「是否为当前曲目」由行自己订阅：播放进度每次发布时整页不再重渲染，切歌时也只有
+ * 前后两首所在的行变化。`TrackRow` 本身仍从参数取高亮——播放队列按位置而不是曲目高亮。
+ */
+function LibraryTrackRow(props: { track: Track; onPress: () => void; onMore: () => void }) {
+  const active = useIsCurrentTrack(props.track.id);
+  return <TrackRow {...props} active={active} />;
+}
+
 /**
  * 搜索页。设计稿只画到「音乐库」这一层，没有单独的搜索屏——这里沿用设计稿的
  * 搜索框与区块标题，承担曲库检索与「全部曲目」浏览：关键词为空时列出整个曲库，
@@ -42,7 +55,19 @@ export default function SearchScreen() {
   const [actionsFor, setActionsFor] = useState<Track | null>(null);
 
   const tracks = useTracks(sortBy, keyword);
-  const playback = usePlayback();
+
+  const renderItem = useCallback(
+    ({ item, index }: { item: Track; index: number }) => (
+      <LibraryTrackRow
+        track={item}
+        // 从曲库点播时用整个当前视图替换队列：用户看到的顺序就是接下来会播的顺序，
+        // 搜索或换排序后再点，队列也随之变成那个顺序。
+        onPress={() => void playQueue(tracks, index)}
+        onMore={() => setActionsFor(item)}
+      />
+    ),
+    [tracks],
+  );
 
   useEffect(() => {
     void loadLibrarySort().then(setSortBy);
@@ -78,18 +103,9 @@ export default function SearchScreen() {
           data={tracks}
           keyExtractor={(track) => track.id}
           contentContainerStyle={{ paddingBottom: dockInset }}
-          ItemSeparatorComponent={() => <View style={{ height: TRACK_ROW_GAP }} />}
+          ItemSeparatorComponent={RowSeparator}
           showsVerticalScrollIndicator={false}
-          renderItem={({ item, index }) => (
-            <TrackRow
-              track={item}
-              active={playback.currentTrack?.id === item.id}
-              // 从曲库点播时用整个当前视图替换队列：用户看到的顺序就是接下来会播的顺序，
-              // 搜索或换排序后再点，队列也随之变成那个顺序。
-              onPress={() => void playQueue(tracks, index)}
-              onMore={() => setActionsFor(item)}
-            />
-          )}
+          renderItem={renderItem}
         />
       )}
 
