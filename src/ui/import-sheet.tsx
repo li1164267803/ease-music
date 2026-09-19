@@ -13,6 +13,7 @@ import {
   type PreparedPlaylist,
 } from '@/library/import';
 import { notifyLibraryChanged } from '@/library/store';
+import { keepsCopyOfPickedFiles } from '@/sources/local-file';
 import { ImportToPlaylistSheet, type CandidateLoader } from '@/ui/import-to-playlist-sheet';
 import { Sheet, SheetAction } from '@/ui/sheet';
 import { AppText } from '@/ui/text';
@@ -113,7 +114,11 @@ function AddPanel({ onPlaylist }: { onPlaylist: () => void }) {
     <>
       <SheetAction
         label="从设备选择音频文件"
-        hint="可多选。原文件留在原处，曲库只记录它的位置。"
+        hint={
+          keepsCopyOfPickedFiles
+            ? '可多选。应用内会另存一份，原文件不受影响。'
+            : '可多选。原文件留在原处，曲库只记录它的位置。'
+        }
         onPress={() => void pickFiles()}
       />
 
@@ -190,17 +195,19 @@ function PlaylistPanel({
 }) {
   const [busy, setBusy] = useState(false);
   const [url, setUrl] = useState('');
-  const [message, setMessage] = useState<string | null>(null);
+  // 记下失败来自哪个入口：只有地址导入失败才该把地址输入框标红，
+  // 选中的文件不是播放列表时标红它，看上去像是地址填错了。
+  const [failure, setFailure] = useState<{ reason: string; fromUrl: boolean } | null>(null);
 
-  const prepare = async (run: () => Promise<PreparedPlaylist>) => {
+  const prepare = async (run: () => Promise<PreparedPlaylist>, fromUrl: boolean) => {
     setBusy(true);
-    setMessage(null);
+    setFailure(null);
     try {
       const prepared = await run();
       // 取消不是失败，不该在界面上留下一条红字。
       if (prepared.status === 'canceled') return;
       if (prepared.status === 'failed') {
-        setMessage(prepared.reason);
+        setFailure({ reason: prepared.reason, fromUrl });
         return;
       }
       onReady({ collected: prepared.collected, defaultName: prepared.defaultName });
@@ -218,7 +225,7 @@ function PlaylistPanel({
       <SheetAction
         label="从设备选择播放列表文件"
         hint=".m3u / .m3u8"
-        onPress={() => void prepare(preparePlaylistFromFile)}
+        onPress={() => void prepare(preparePlaylistFromFile, false)}
       />
 
       <View style={{ gap: 8 }}>
@@ -230,7 +237,7 @@ function PlaylistPanel({
             value={url}
             onChangeText={(text) => {
               setUrl(text);
-              setMessage(null);
+              setFailure(null);
             }}
             placeholder="https://example.com/list.m3u"
             placeholderTextColor={Colors.textMuted}
@@ -247,11 +254,11 @@ function PlaylistPanel({
               fontFamily: Font.regular,
               fontSize: 13,
               borderWidth: 1,
-              borderColor: message ? Colors.danger : 'transparent',
+              borderColor: failure?.fromUrl ? Colors.danger : 'transparent',
             }}
           />
           <Pressable
-            onPress={() => void prepare(() => preparePlaylistFromUrl(url))}
+            onPress={() => void prepare(() => preparePlaylistFromUrl(url), true)}
             disabled={busy || url.trim().length === 0}
             style={{
               height: 47,
@@ -270,9 +277,9 @@ function PlaylistPanel({
       </View>
 
       {busy ? <ActivityIndicator color={Colors.accent} /> : null}
-      {message ? (
+      {failure ? (
         <AppText size={12} color={Colors.danger} lineHeight={19}>
-          {message}
+          {failure.reason}
         </AppText>
       ) : null}
 

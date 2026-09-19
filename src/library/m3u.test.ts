@@ -160,10 +160,29 @@ test('空文件解析出零条目零跳过', () => {
   assert.deepEqual(playlist('#EXTM3U\n\n'), { kind: 'playlist', entries: [], skipped: [] });
 });
 
-test('不是播放列表的文本解析不出条目', () => {
+test('不是播放列表的文本解析不出条目，也没有跳过项', () => {
   const { entries, skipped } = playlist('这是一篇随手记\n第二行也不是地址', null);
   assert.equal(entries.length, 0);
-  assert.equal(skipped.length, 2);
+  assert.equal(skipped.length, 0);
+});
+
+test('网页内容不产生条目', () => {
+  const { entries, skipped } = playlist('<html>\n<body>not audio</body>\n</html>');
+  assert.equal(entries.length, 0);
+  assert.equal(skipped.length, 0);
+});
+
+test('二进制内容（选错的音频文件）整体判为没有条目', () => {
+  const { entries, skipped } = playlist('ID3\u0004\u0000\u0000garbage\nxx.mp3\ngv:ab');
+  assert.equal(entries.length, 0);
+  assert.equal(skipped.length, 0);
+});
+
+test('以扩展名结尾的相对路径与带协议的行仍是条目', () => {
+  const local = playlist('a.mp3\nsongs\\b.flac', new URL('file:///storage/music/list.m3u'));
+  assert.equal(local.skipped.length, 2);
+  const remote = playlist('https://example.com/stream\nsongs/c.mp3?x=1');
+  assert.equal(remote.entries.length, 2);
 });
 
 test('CRLF 与 CR 换行都能切分', () => {

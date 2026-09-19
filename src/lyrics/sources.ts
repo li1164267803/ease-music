@@ -82,13 +82,16 @@ async function fromEmbeddedTags(track: Track): Promise<string | null> {
   if (!metadata) return null;
 
   for (const tag of metadata.lyrics) {
-    const synced = tag.syncText.filter((line) => line.timestamp != null);
+    // 类型声明里 syncText 必填，但 music-metadata 解析 USLT 时产出的对象只有 text，
+    // 没有这个字段——直接 .filter 会抛出，整处来源被当成「没找到」。
+    const syncText = tag.syncText ?? [];
+    const synced = syncText.filter((line) => line.timestamp != null);
     if (synced.length > 0 && tag.timeStampFormat === TimestampFormat.milliseconds) {
       return toLrc(synced.map((line) => ({ timeMs: line.timestamp ?? 0, text: line.text })));
     }
     const plain =
       tag.text?.trim() ||
-      tag.syncText
+      syncText
         .map((line) => line.text)
         .join('\n')
         .trim();

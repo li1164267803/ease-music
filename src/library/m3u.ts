@@ -45,6 +45,11 @@ export function parsePlaylist(text: string, base: URL | null): PlaylistParseResu
   // 判定不存在中间态，因此是整体拒绝而不是跳过可疑行（决策 5）。
   if (lines.some((line) => line.trimStart().startsWith('#EXT-X-'))) return { kind: 'hls' };
 
+  // 选错了文件（比如一首 mp3）：文本播放列表里不会出现控制字符，二进制内容几乎必有。
+  // 不拦的话每段乱码都会被当成一条相对路径，报成「几千个条目无法入库」
+  // （fix-ios-acceptance-issues/design.md 决策 6）。
+  if (containsControlCharacters(text)) return { kind: 'playlist', entries: [], skipped: [] };
+
   const entries: PlaylistEntry[] = [];
   const skipped: SkippedEntry[] = [];
   let pending: ExtInf | null = null;
@@ -57,6 +62,12 @@ export function parsePlaylist(text: string, base: URL | null): PlaylistParseResu
       // `#EXTINF` 之外的注释行不产生条目，也不清掉已读到的元数据——真实文件里
       // `#EXTINF` 与地址之间偶尔夹着别的扩展标签。
       if (/^#EXTINF\s*:/i.test(line)) pending = parseExtInf(line);
+      continue;
+    }
+
+    // 不像在指向任何资源的行（随手写的句子、网页标签）不是条目，也就谈不上「跳过」。
+    if (!referencesResource(line)) {
+      pending = null;
       continue;
     }
 
@@ -145,6 +156,28 @@ function parseDuration(raw: string): number | null {
   // `-1` 是「时长未知」的约定写法；非数字同样当未知。
   if (!Number.isFinite(seconds) || seconds <= 0) return null;
   return Math.round(seconds * 1000);
+}
+
+/** 制表、换行、回车之外的 C0 控制字符。 */
+function containsControlCharacters(text: string): boolean {
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i);
+    if (code < 0x20 && code !== 0x09 && code !== 0x0a && code !== 0x0d) return true;
+  }
+  return false;
+}
+
+/**
+ * 这一行是不是在指向一个资源：带协议的地址，或以扩展名结尾的相对路径。
+ *
+ * 播放列表的条目就是这两种形态。只认这两种，才能把「条目都不可用」与「根本不是播放列表」
+ * 分开——前者要逐条说明原因，后者要告诉用户选错了文件（playlist-file-import spec）。
+ */
+function referencesResource(line: string): boolean {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(line)) return true;
+  const path = line.split(/[?#]/)[0] ?? '';
+  const name = path.split(/[/\\]/).pop() ?? '';
+  return /\.[a-z0-9]{1,5}$/i.test(name);
 }
 
 type ResolvedEntry = { url: URL } | { reason: string };

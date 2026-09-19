@@ -33,6 +33,21 @@ export function isTrackCacheable(track: Track): boolean {
 export type DownloadProgressHandler = (bytesWritten: number, totalBytes: number) => void;
 
 /**
+ * 多久收不到任何新数据就判定下载停滞（fix-ios-acceptance-issues/design.md 决策 5）。
+ *
+ * 不能指望底层报错：iOS 的 URLSession 在连接中途断开后会自己重连，服务端不回来就一直
+ * 等下去，应用收不到失败回调，界面永远停在断开时的进度。「一直没有新数据」是应用这边
+ * 唯一可靠的信号。30 秒远长于正常网络里两次进度回调的间隔，不会误伤慢速下载。
+ */
+const STALL_TIMEOUT_MS = 30_000;
+
+class DownloadStalledError extends Error {
+  constructor() {
+    super('长时间没有收到数据，网络连接可能已中断，下载未能完成。');
+  }
+}
+
+/**
  * 把一首曲目的音频下载到本地，返回待写入的缓存记录。
  *
  * 地址在**轮到执行时**才解析，不在入队时解析：插件给的常是短时效链接，
@@ -61,17 +76,37 @@ export async function downloadTrackAudio(
     const partial = partialFileFor(track.id);
     if (partial.exists) partial.delete();
 
+    let stalled = false;
+    let watchdog: ReturnType<typeof setTimeout> | undefined;
+    const rearm = () => {
+      clearTimeout(watchdog);
+      watchdog = setTimeout(() => {
+        stalled = true;
+        task.cancel();
+      }, STALL_TIMEOUT_MS);
+    };
+
     const task = File.createDownloadTask(media.uri, partial, {
       // 防盗链要求下载请求与播放请求带同样的头。契约把 UA 单列一项，
       // 而下载任务只认 headers——与播放层的处理保持一致，合并成一个 header。
       headers: media.userAgent
         ? { ...media.headers, 'User-Agent': media.userAgent }
         : media.headers,
-      onProgress: ({ bytesWritten, totalBytes }) => onProgress(bytesWritten, totalBytes),
+      onProgress: ({ bytesWritten, totalBytes }) => {
+        rearm();
+        onProgress(bytesWritten, totalBytes);
+      },
       signal,
     });
 
-    await task.downloadAsync();
+    rearm();
+    try {
+      await task.downloadAsync();
+    } catch (error) {
+      throw stalled ? new DownloadStalledError() : error;
+    } finally {
+      clearTimeout(watchdog);
+    }
     if (!partial.exists || partial.size <= 0) {
       throw new Error('下载没有得到任何内容，地址可能已失效。');
     }
@@ -122,8 +157,10 @@ async function readCachedDuration(uri: string): Promise<number | null> {
  * `HTTP 403`、`ENOSPC` 这类英文技术信息，直接摆给用户等于没说。
  */
 function describeFailure(error: unknown): Error {
-  // 来源解析失败自带中文说明（各来源实现已经写好），原样透出即可。
-  if (error instanceof MediaResolutionError) return new Error(error.message);
+  // 来源解析失败与下载停滞自带中文说明，原样透出即可。
+  if (error instanceof MediaResolutionError || error instanceof DownloadStalledError) {
+    return new Error(error.message);
+  }
 
   const message = error instanceof Error ? error.message : String(error);
 

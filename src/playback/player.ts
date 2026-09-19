@@ -72,12 +72,16 @@ let player: AudioPlayer | null = null;
 let order: PlayOrder = { order: [], position: -1 };
 let lockScreenActive = false;
 /**
- * 连续失败的次数。任一曲目成功发声即归零，达到上限时停止自动跳过（决策 4）。
+ * 本轮连续失败过的曲目。任一曲目成功发声即清空，达到上限时停止自动跳过（决策 4）。
+ *
+ * 记的是曲目而不是失败次数：列表循环或随机模式下跳过会绕回来，队列只有一首时更是
+ * 原地打转，按次数数会把同一首重试到上限，还报成「连续 N 首」。跳过的目标已经在这里，
+ * 说明队列里能试的都试过了，立即停下（fix-ios-acceptance-issues/design.md 决策 3）。
  *
  * 上限是固定常量而不是队列长度：连续失败说明问题不在单首曲目（来源下线、断网），
  * 一千多首的歌单被逐首尝试一遍，只会空耗网络请求并一直占着界面。
  */
-let consecutiveFailures = 0;
+const failedInStreak = new Set<string>();
 const MAX_CONSECUTIVE_FAILURES = 5;
 /**
  * 失败后跳过的方向：沿用触发这次装载的导航方向（决策 2）。
@@ -88,6 +92,8 @@ const MAX_CONSECUTIVE_FAILURES = 5;
 let skipDirection: 1 | -1 = 1;
 /** 每次切歌（或停止）自增，用于丢弃已过期的异步解析结果。 */
 let loadToken = 0;
+/** 已经发过声的那次装载，见 `markSounding`。 */
+let soundedToken = -1;
 /**
  * 引擎里装着的音源属于哪一次装载，并记下它的地址供出错后诊断（决策 5、6）。
  *
@@ -112,6 +118,8 @@ const SEEK_SETTLE_TOLERANCE_MS = 800;
 const SEEK_SETTLE_TIMEOUT_MS = 1500;
 /** 引擎出错后诊断请求的超时。超时按「无法连接」报告。 */
 const PROBE_TIMEOUT_MS = 8000;
+/** 装载多久还没就绪，就去问服务端这个地址的情况（见 `checkSlowLoad`）。 */
+const SLOW_LOAD_CHECK_MS = 10_000;
 
 function publish(patch: Partial<PlaybackSnapshot>): void {
   snapshot = { ...snapshot, ...patch };
@@ -210,11 +218,20 @@ function toState(status: AudioStatus): PlaybackState {
   return status.playing ? 'playing' : 'paused';
 }
 
-/** 曲目确实发出了声音：连续失败到此为止，关于这首曲目的失败提示也不再成立。 */
+/**
+ * 曲目确实发出了声音：连续失败到此为止，关于这首曲目的失败提示也不再成立，并记一次播放。
+ *
+ * 状态回报每 500ms 一拍，这里只在每次装载第一次发声时生效：一次装载就是一次播放，
+ * 暂停后继续不算新的一次。
+ */
 function markSounding(track: Track): void {
-  consecutiveFailures = 0;
+  if (soundedToken === loadToken) return;
+  soundedToken = loadToken;
+
+  failedInStreak.clear();
   skipDirection = 1;
   if (snapshot.failure?.trackId === track.id) publish({ failure: null });
+  rememberPlayed(track);
 }
 
 /** 用给定曲目替换整个播放队列并从指定位置开始播放。 */
@@ -335,7 +352,7 @@ async function advance(direction: 1 | -1, reason: AdvanceReason): Promise<void> 
   const target = step(order, direction, snapshot.playMode, reason);
 
   if (!target) {
-    consecutiveFailures = 0;
+    failedInStreak.clear();
     player?.pause();
     publish({ state: 'paused', playWhenReady: false });
     return;
@@ -417,12 +434,10 @@ async function load(
 
     player.replace({ uri: media.uri, headers });
     engineSource = { token, uri: media.uri, headers };
+    setTimeout(() => void checkSlowLoad(token, track), SLOW_LOAD_CHECK_MS);
 
     // 按此刻的意图而不是发起装载时的 autoPlay：用户可能在解析期间点了暂停
-    if (snapshot.playWhenReady) {
-      player.play();
-      rememberPlayed(track);
-    }
+    if (snapshot.playWhenReady) player.play();
   } catch (error) {
     if (token !== loadToken) return;
     await handleLoadFailure(track, error);
@@ -441,11 +456,10 @@ async function load(
  * 3. **但不静默**。写进 warn，否则线上问题无从查起（与 `src/library/metadata.ts`
  *    的处理一致）。
  *
- * 调用点在 `load()` 内、`player.replace` 成功之后且仅当用户仍想播放：解析成功不等于
- * 播得响，而 `autoPlay: false` 那条路径（队列为空时的预装载）与解析期间被用户暂停的
- * 那次装载都不是一次播放。
- * 「装载中途用户又切歌」由 `load()` 既有的 `token !== loadToken` 守卫挡掉——那时
- * 函数已经提前返回，根本走不到这里，因此这里不需要自己再判一次。
+ * 调用点是 `markSounding`，即本次装载第一次真正发声的时刻（fix-ios-acceptance-issues/
+ * design.md 决策 4）。不能早于这一刻：远程地址的「解析」只是把地址原样交出，永远成功，
+ * 在 `player.replace` 之后就记，会把地址失效、内容不是音频这些根本没播出来的曲目记进
+ * 历史，自动跳过时的每次重试还会各记一次（playback-history spec：播放失败不记入）。
  */
 function rememberPlayed(track: Track): void {
   void recordPlay(track.id)
@@ -475,13 +489,17 @@ async function handleLoadFailure(track: Track, error: unknown): Promise<void> {
  * 这首曲目就改写文案，已被别的失败取代或被清除则丢弃。
  */
 async function failTrack(track: Track, reason: string, diagnosis?: Promise<string>): Promise<void> {
-  consecutiveFailures += 1;
-  const stopped = consecutiveFailures >= MAX_CONSECUTIVE_FAILURES;
+  failedInStreak.add(track.id);
+  const failedCount = failedInStreak.size;
+  const target = step(order, skipDirection, snapshot.playMode, 'skipped');
+  const exhausted = target !== null && failedInStreak.has(snapshot.queue[target.index]?.id ?? '');
+  const stopped = exhausted || failedCount >= MAX_CONSECUTIVE_FAILURES;
   const describe = (text: string): PlaybackFailure => ({
     trackId: track.id,
-    message: stopped
-      ? `连续 ${MAX_CONSECUTIVE_FAILURES} 首无法播放，已停止。最近一首「${track.title}」：${text}`
-      : `「${track.title}」播放失败：${text}`,
+    message:
+      stopped && failedCount > 1
+        ? `连续 ${failedCount} 首无法播放，已停止。最近一首「${track.title}」：${text}`
+        : `「${track.title}」播放失败：${text}`,
   });
 
   publish({ failure: describe(reason) });
@@ -490,7 +508,7 @@ async function failTrack(track: Track, reason: string, diagnosis?: Promise<strin
   });
 
   if (stopped || !snapshot.playWhenReady) {
-    consecutiveFailures = 0;
+    failedInStreak.clear();
     player?.pause();
     publish({ state: 'paused', playWhenReady: false });
     return;
@@ -502,13 +520,16 @@ async function failTrack(track: Track, reason: string, diagnosis?: Promise<strin
 const UNDECODABLE = '音频无法解码，格式不受支持或文件已损坏。';
 
 /**
- * 引擎只报出「Source error」时，问一次服务端这个地址现在是什么情况（决策 6）。
+ * 问一次服务端这个地址现在是什么情况（决策 6）。连不上或超时返回 null。
  *
  * expo-audio 在桥接层丢掉了引擎的错误码与 HTTP 状态码，不改原生代码时，最直接的信号就是
  * 服务端对同一请求的回应。只取两个字节、拿到响应头即中止——服务端忽略 Range 时
  * 也不会把整首歌下载下来，所以用能流式读取的 expo/fetch 而不是内置 fetch。
  */
-async function diagnose(uri: string, headers?: Record<string, string>): Promise<string> {
+async function probe(
+  uri: string,
+  headers?: Record<string, string>,
+): Promise<{ status: number; contentType: string } | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
   try {
@@ -516,16 +537,56 @@ async function diagnose(uri: string, headers?: Record<string, string>): Promise<
       headers: { ...headers, Range: 'bytes=0-1' },
       signal: controller.signal,
     });
-    if (response.status >= 400) {
-      return `音频地址返回了错误（HTTP ${response.status}），可能已失效。`;
-    }
-    return UNDECODABLE;
+    return { status: response.status, contentType: response.headers.get('content-type') ?? '' };
   } catch {
-    return '无法连接到音频地址，请检查网络后重试。';
+    return null;
   } finally {
     clearTimeout(timer);
     controller.abort();
   }
+}
+
+const httpErrorReason = (status: number): string =>
+  `音频地址返回了错误（HTTP ${status}），可能已失效。`;
+
+/** 服务端自己声明回的是文本或网页（错误页、登录页）。音频不会以这些类型下发。 */
+const isTextual = (contentType: string): boolean => /^text\/|html/i.test(contentType);
+
+/** 引擎只报出「Source error」时，把它换成用户看得懂的原因。 */
+async function diagnose(uri: string, headers?: Record<string, string>): Promise<string> {
+  const response = await probe(uri, headers);
+  if (!response) return '无法连接到音频地址，请检查网络后重试。';
+  if (response.status >= 400) return httpErrorReason(response.status);
+  return UNDECODABLE;
+}
+
+/**
+ * 装载迟迟没有就绪时，判断是网络慢还是地址本身有问题（fix-ios-acceptance-issues/
+ * design.md 决策 2）。
+ *
+ * iOS 的 AVPlayer 拿到一段网页时不报错，而是一直停在「评估缓冲速率」，与网速慢在引擎
+ * 回报上无法区分。能区分二者的只有服务端的回应：状态码出错、或声明的是文本/网页，
+ * 就是地址的问题；否则按网络慢处理，继续等——宁可多等，也不把慢速网络上的正常曲目判死。
+ * Android 的 ExoPlayer 对这类内容会直接报错，走不到这里。
+ */
+async function checkSlowLoad(token: number, track: Track): Promise<void> {
+  if (token !== loadToken || snapshot.state !== 'loading' || engineSource?.token !== token) return;
+  const { uri, headers } = engineSource;
+  if (!/^https?:/i.test(uri)) return;
+
+  const response = await probe(uri, headers);
+  if (!response || token !== loadToken || snapshot.state !== 'loading') return;
+
+  const reason =
+    response.status >= 400
+      ? httpErrorReason(response.status)
+      : isTextual(response.contentType)
+        ? UNDECODABLE
+        : null;
+  if (!reason) return;
+
+  engineSource = null;
+  await failTrack(track, reason);
 }
 
 /**

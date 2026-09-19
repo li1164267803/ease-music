@@ -195,8 +195,9 @@ export default function ProfileScreen() {
           label={lyricsDirectory ? '更换目录' : '选择目录'}
           hint="更换后已缓存的歌词会按新目录重新查找"
           onPress={() => {
-            setEditingLyricsDirectory(false);
-            void chooseLyricsDirectory();
+            // 选完再关面板，不能反过来：iOS 上选择器由最上层的视图控制器弹出，面板正在
+            // 退场时弹不出来，原生侧的选择状态还会卡住，此后所有文件选择器都失效。
+            void chooseLyricsDirectory().finally(() => setEditingLyricsDirectory(false));
           }}
         />
         {lyricsDirectory ? (

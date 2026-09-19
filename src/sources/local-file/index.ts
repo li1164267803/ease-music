@@ -149,14 +149,19 @@ function buildSourceKey(file: File, fileName: string, size: number | null): stri
 }
 
 /**
- * 把选中的文件落到能长期访问的位置，返回写入曲目记录的 `sourceRef`。
+ * 导入的本地文件是否在应用内另存一份（fix-ios-acceptance-issues/design.md 决策 7）。
  *
  * media-source spec 要求「所选文件在设备上的可访问性 MUST 在应用重启后依然有效」。
  * Android 的持久 URI 授权已经满足，原样保存即可，用户设备上只有一份文件；
- * iOS 的临时副本会被系统清理，必须搬进应用的文档目录才算数。
+ * iOS 的选择器只交出一份临时副本，原文件的位置不对应用暴露，副本会被系统清理，
+ * 只能搬进应用的文档目录——原文件仍在原处，设备上因此是两份。
+ * 界面上对导入方式的说明也读这里，与实际行为同源。
  */
+export const keepsCopyOfPickedFiles = Platform.OS !== 'android';
+
+/** 把选中的文件落到能长期访问的位置，返回写入曲目记录的 `sourceRef`。 */
 export async function persistPickedFile(picked: PickedAudioFile): Promise<SourceRef> {
-  if (Platform.OS === 'android') {
+  if (!keepsCopyOfPickedFiles) {
     return { uri: picked.file.uri, fileName: picked.fileName, managed: false };
   }
 
